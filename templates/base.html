@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
+  <title>{% block title %}Tesouraria INJ{% endblock %}</title>
+
+  <!-- Bootstrap 5 -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+  <!-- Bootstrap Icons -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}"/>
+  {% block head %}{% endblock %}
+</head>
+<body>
+
+<!-- ═══ SIDEBAR ═══ -->
+<div class="sidebar" id="sidebar">
+  <div class="sidebar-brand">
+    <div class="brand-icon"><i class="bi bi-bank2"></i></div>
+    <div class="brand-text">
+      <div class="brand-title">Tesouraria</div>
+      <div class="brand-sub">{{ cfg.get('nome_congregacao', 'INJ') | truncate(22, True) }}</div>
+    </div>
+  </div>
+
+  <nav class="sidebar-nav">
+    <div class="nav-section">MENU PRINCIPAL</div>
+    <a href="{{ url_for('dashboard') }}" class="nav-item {% if request.endpoint == 'dashboard' %}active{% endif %}">
+      <i class="bi bi-speedometer2"></i> Dashboard
+    </a>
+    <a href="{{ url_for('lancamentos') }}" class="nav-item {% if request.endpoint in ('lancamentos','editar_lancamento') %}active{% endif %}">
+      <i class="bi bi-pencil-square"></i> Lançamentos
+    </a>
+    <a href="{{ url_for('dizimos') }}" class="nav-item {% if request.endpoint == 'dizimos' %}active{% endif %}">
+      <i class="bi bi-cash-coin"></i> Dízimos
+    </a>
+
+    <div class="nav-section mt-2">ANÁLISE</div>
+    <a href="{{ url_for('orcamento') }}" class="nav-item {% if request.endpoint == 'orcamento' %}active{% endif %}">
+      <i class="bi bi-pie-chart"></i> Orçamento
+    </a>
+    <a href="{{ url_for('relatorio') }}" class="nav-item {% if request.endpoint == 'relatorio' %}active{% endif %}">
+      <i class="bi bi-bar-chart-line"></i> Relatórios
+    </a>
+
+    <div class="nav-section mt-2">SISTEMA</div>
+    <a href="{{ url_for('configuracoes') }}" class="nav-item {% if request.endpoint == 'configuracoes' %}active{% endif %}">
+      <i class="bi bi-gear"></i> Configurações
+    </a>
+    {% if session.get('is_admin') %}
+    <a href="{{ url_for('admin') }}" class="nav-item {% if request.endpoint in ('admin','admin_nova_cong') %}active{% endif %}">
+      <i class="bi bi-shield-lock"></i> Administrador
+    </a>
+    {% endif %}
+    <a href="{{ url_for('minha_conta') }}" class="nav-item {% if request.endpoint == 'minha_conta' %}active{% endif %}">
+      <i class="bi bi-person-gear"></i> Minha Conta
+    </a>
+  </nav>
+
+  <div class="sidebar-footer">
+    <div class="text-muted small text-center px-3">
+      Ano atual: <strong class="text-light">{{ cfg.get('ano_atual', '—') }}</strong>
+    </div>
+  </div>
+</div>
+
+<!-- ═══ CONTEÚDO PRINCIPAL ═══ -->
+<div class="main-content" id="mainContent">
+
+  <!-- Topbar -->
+  <div class="topbar">
+    <button class="btn btn-link text-dark p-0 me-3" id="sidebarToggle">
+      <i class="bi bi-list fs-4"></i>
+    </button>
+    <nav aria-label="breadcrumb" class="flex-grow-1">
+      <ol class="breadcrumb mb-0">
+        <li class="breadcrumb-item"><a href="{{ url_for('dashboard') }}">Início</a></li>
+        {% block breadcrumb %}{% endblock %}
+      </ol>
+    </nav>
+    <div class="topbar-right d-flex align-items-center gap-3">
+      <span class="text-muted small">
+        <i class="bi bi-buildings me-1"></i>
+        <strong>{{ session.get('cong_nome', cfg.get('nome_congregacao','—')) | truncate(25,True) }}</strong>
+      </span>
+      <a href="{{ url_for('logout') }}" class="btn btn-sm btn-outline-secondary"
+         title="Sair" onclick="return confirm('Deseja sair do sistema?')">
+        <i class="bi bi-box-arrow-right"></i>
+      </a>
+    </div>
+  </div>
+
+  <!-- Alertas flash -->
+  <div class="px-4 pt-2">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% if messages %}
+        {% for cat, msg in messages %}
+          <div class="alert alert-{{ cat }} alert-dismissible fade show" role="alert">
+            <i class="bi bi-{% if cat=='success' %}check-circle{% elif cat=='danger' %}exclamation-triangle{% else %}info-circle{% endif %} me-2"></i>
+            {{ msg }}
+            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+          </div>
+        {% endfor %}
+      {% endif %}
+    {% endwith %}
+  </div>
+
+  <!-- Conteúdo da página -->
+  <div class="page-content">
+    {% block content %}{% endblock %}
+  </div>
+
+</div><!-- /main-content -->
+
+<!-- Scripts -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+
+</body>
+</html>

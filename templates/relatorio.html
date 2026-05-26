@@ -1,0 +1,211 @@
+{% extends 'base.html' %}
+{% block title %}Relatórios — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Relatórios</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="page-title">Relatórios</h1>
+    <p class="text-muted mb-0 small">Analise e exporte o fluxo financeiro</p>
+  </div>
+  <a href="{{ url_for('exportar_excel', ano=ano_sel) }}" class="btn btn-success">
+    <i class="bi bi-file-earmark-excel me-2"></i>Exportar Excel
+  </a>
+</div>
+
+<!-- ── Filtros ── -->
+<div class="filter-bar mb-4">
+  <form method="GET" class="row g-2 align-items-end">
+    <div class="col-sm-2">
+      <label class="form-label mb-1 small">Ano</label>
+      <select name="ano" class="form-select form-select-sm">
+        {% for a in anos %}
+          <option value="{{ a }}" {% if a == ano_sel %}selected{% endif %}>{{ a }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-sm-2">
+      <label class="form-label mb-1 small">Mês</label>
+      <select name="mes" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for m in meses %}
+          <option value="{{ m }}" {% if m == mes_sel %}selected{% endif %}>{{ m | capitalize }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-sm-3">
+      <label class="form-label mb-1 small">Livro</label>
+      <select name="livro" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        {% for l in livros %}
+          <option value="{{ l }}" {% if l == livro_sel %}selected{% endif %}>{{ livros_labels[l] }}</option>
+        {% endfor %}
+      </select>
+    </div>
+    <div class="col-sm-2">
+      <label class="form-label mb-1 small">Tipo</label>
+      <select name="tipo" class="form-select form-select-sm">
+        <option value="">Todos</option>
+        <option value="Entrada" {% if tipo_sel=='Entrada' %}selected{% endif %}>Entrada</option>
+        <option value="Saída"   {% if tipo_sel=='Saída'   %}selected{% endif %}>Saída</option>
+      </select>
+    </div>
+    <div class="col-sm-2">
+      <label class="form-label mb-1 small">Buscar item</label>
+      <input type="text" name="item" class="form-control form-control-sm"
+             placeholder="Palavra-chave..." value="{{ item_sel }}"/>
+    </div>
+    <div class="col-sm-1">
+      <button type="submit" class="btn btn-sm btn-primary w-100">
+        <i class="bi bi-search"></i>
+      </button>
+    </div>
+  </form>
+</div>
+
+<!-- ── Totalizadores ── -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="stat-card entrada">
+      <div class="stat-label">Entradas</div>
+      <div class="stat-value text-entrada">{{ total_e | brl }}</div>
+      <div class="stat-sub">{{ transacoes | selectattr('tipo','eq','Entrada') | list | length }} lançamentos</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card saida">
+      <div class="stat-label">Saídas</div>
+      <div class="stat-value text-saida">{{ total_s | brl }}</div>
+      <div class="stat-sub">{{ transacoes | selectattr('tipo','eq','Saída') | list | length }} lançamentos</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card saldo">
+      <div class="stat-label">Superávit</div>
+      <div class="stat-value {% if superavit >= 0 %}text-entrada{% else %}text-saida{% endif %}">{{ superavit | brl }}</div>
+      <div class="stat-sub">{{ pct }}% das entradas</div>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card">
+      <div class="stat-label">Total registros</div>
+      <div class="stat-value" style="color:#1a5276">{{ transacoes | length }}</div>
+      <div class="stat-sub">Filtro ativo</div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- ── Resumo mensal ── -->
+  {% if resumo_mensal %}
+  <div class="col-lg-5">
+    <div class="table-card">
+      <div class="table-header">
+        <h6><i class="bi bi-calendar3 me-2 text-primary"></i>Resumo Mensal</h6>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead>
+            <tr><th>Mês</th><th class="text-end">Entradas</th><th class="text-end">Saídas</th><th class="text-end">Saldo</th></tr>
+          </thead>
+          <tbody>
+            {% for r in resumo_mensal %}
+            <tr>
+              <td class="fw-semibold">{{ r.mes | capitalize }}</td>
+              <td class="text-end text-entrada">{{ r.entradas | brl }}</td>
+              <td class="text-end text-saida">{{ r.saidas | brl }}</td>
+              <td class="text-end fw-bold {% if r.saldo >= 0 %}text-entrada{% else %}text-saida{% endif %}">{{ r.saldo | brl }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+          <tfoot class="table-light">
+            <tr>
+              <td class="fw-bold">TOTAL</td>
+              <td class="text-end fw-bold text-entrada">{{ total_e | brl }}</td>
+              <td class="text-end fw-bold text-saida">{{ total_s | brl }}</td>
+              <td class="text-end fw-bold {% if superavit >= 0 %}text-entrada{% else %}text-saida{% endif %}">{{ superavit | brl }}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+
+  <!-- ── Por Livro ── -->
+  {% if resumo_livro %}
+  <div class="col-lg-{% if resumo_mensal %}7{% else %}12{% endif %}">
+    <div class="table-card mb-4">
+      <div class="table-header">
+        <h6><i class="bi bi-journals me-2 text-primary"></i>Por Livro</h6>
+      </div>
+      <div class="table-responsive">
+        <table class="table table-hover mb-0">
+          <thead><tr><th>Livro</th><th class="text-end">Entradas</th><th class="text-end">Saídas</th><th class="text-end">Saldo</th></tr></thead>
+          <tbody>
+            {% for r in resumo_livro %}
+            {% set saldo_l = r['e'] - r['s'] %}
+            <tr>
+              <td>
+                <span class="badge rounded-pill livro-{{ r['livro'] }} px-2">{{ livros_labels.get(r['livro'], r['livro']) }}</span>
+              </td>
+              <td class="text-end text-entrada">{{ r['e'] | brl }}</td>
+              <td class="text-end text-saida">{{ r['s'] | brl }}</td>
+              <td class="text-end fw-bold {% if saldo_l >= 0 %}text-entrada{% else %}text-saida{% endif %}">{{ saldo_l | brl }}</td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  {% endif %}
+</div>
+
+<!-- ── Tabela detalhada ── -->
+<div class="table-card mt-2">
+  <div class="table-header">
+    <h6><i class="bi bi-table me-2 text-primary"></i>Extrato Detalhado ({{ transacoes | length }} registros)</h6>
+  </div>
+  <div class="table-responsive" style="max-height:480px; overflow-y:auto">
+    <table class="table table-hover mb-0">
+      <thead style="position:sticky;top:0">
+        <tr>
+          <th>#</th><th>Livro</th><th>Tipo</th><th>Item</th>
+          <th class="text-end">Valor</th><th>Mês</th><th>Ano</th><th>Data</th><th>Obs</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in transacoes %}
+        <tr>
+          <td class="text-muted small">{{ t['id'] }}</td>
+          <td>
+            <span class="badge rounded-pill livro-{{ t['livro'] }}" style="font-size:0.65rem">{{ t['livro'] }}</span>
+          </td>
+          <td>
+            <span class="badge {% if t['tipo']=='Entrada' %}badge-entrada{% else %}badge-saida{% endif %} rounded-pill px-2" style="font-size:0.68rem">
+              {{ t['tipo'] }}
+            </span>
+          </td>
+          <td class="small">{{ t['item'] }}</td>
+          <td class="text-end fw-semibold {% if t['tipo']=='Entrada' %}text-entrada{% else %}text-saida{% endif %}">
+            {{ t['valor'] | brl }}
+          </td>
+          <td class="small">{{ t['mes'] | capitalize }}</td>
+          <td class="small">{{ t['ano'] }}</td>
+          <td class="small text-muted">{{ t['data_registro'] or '—' }}</td>
+          <td class="small text-muted">{{ t['obs'] or '' }}</td>
+        </tr>
+        {% else %}
+        <tr>
+          <td colspan="9" class="text-center text-muted py-5">
+            <i class="bi bi-search fs-3 d-block mb-2 opacity-25"></i>
+            Nenhum resultado encontrado com os filtros atuais.
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

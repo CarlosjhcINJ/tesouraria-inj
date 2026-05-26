@@ -1,0 +1,351 @@
+/* ════════════════════════════════════════════
+   TESOURARIA INJ — Estilos Principais
+   ════════════════════════════════════════════ */
+
+:root {
+  --sidebar-width: 260px;
+  --sidebar-bg: #0f2744;
+  --sidebar-hover: rgba(255,255,255,0.08);
+  --sidebar-active: #2980b9;
+  --topbar-h: 60px;
+  --primary: #1a5276;
+  --entrada: #27ae60;
+  --saida: #e74c3c;
+  --warning: #f39c12;
+  --light-bg: #f4f6f9;
+  --card-shadow: 0 2px 12px rgba(0,0,0,0.07);
+  --radius: 12px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--light-bg);
+  color: #2c3e50;
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+}
+
+/* ── SIDEBAR ── */
+.sidebar {
+  position: fixed;
+  top: 0; left: 0;
+  width: var(--sidebar-width);
+  height: 100vh;
+  background: var(--sidebar-bg);
+  display: flex;
+  flex-direction: column;
+  z-index: 1000;
+  transition: transform 0.3s ease;
+  overflow-y: auto;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 22px 20px;
+  border-bottom: 1px solid rgba(255,255,255,0.08);
+}
+
+.brand-icon {
+  width: 44px; height: 44px;
+  background: var(--sidebar-active);
+  border-radius: 10px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px;
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.brand-title { color: #fff; font-weight: 700; font-size: 1.05rem; line-height: 1.2; }
+.brand-sub   { color: rgba(255,255,255,0.55); font-size: 0.72rem; }
+
+.sidebar-nav { padding: 12px 0; flex: 1; }
+
+.nav-section {
+  color: rgba(255,255,255,0.35);
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  padding: 12px 20px 4px;
+  text-transform: uppercase;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  color: rgba(255,255,255,0.75);
+  text-decoration: none;
+  font-size: 0.88rem;
+  font-weight: 500;
+  border-radius: 0;
+  transition: all 0.2s;
+  margin: 1px 8px;
+  border-radius: 8px;
+}
+
+.nav-item i { font-size: 1rem; width: 20px; text-align: center; }
+.nav-item:hover { background: var(--sidebar-hover); color: #fff; }
+.nav-item.active {
+  background: var(--sidebar-active);
+  color: #fff;
+  font-weight: 600;
+}
+
+.sidebar-footer {
+  padding: 16px;
+  border-top: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ── MAIN CONTENT ── */
+.main-content {
+  margin-left: var(--sidebar-width);
+  min-height: 100vh;
+  transition: margin-left 0.3s ease;
+}
+
+.sidebar.collapsed {
+  transform: translateX(calc(-1 * var(--sidebar-width)));
+}
+.sidebar.collapsed ~ .main-content {
+  margin-left: 0;
+}
+
+/* ── TOPBAR ── */
+.topbar {
+  height: var(--topbar-h);
+  background: #fff;
+  border-bottom: 1px solid #e8ecf0;
+  display: flex;
+  align-items: center;
+  padding: 0 24px;
+  position: sticky;
+  top: 0;
+  z-index: 999;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+}
+
+.topbar .breadcrumb { font-size: 0.83rem; }
+.topbar-right { margin-left: auto; display: flex; align-items: center; gap: 16px; }
+
+/* ── PAGE CONTENT ── */
+.page-content {
+  padding: 28px 32px;
+}
+
+.page-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--primary);
+  margin-bottom: 0;
+}
+
+/* ── CARDS ── */
+.stat-card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 22px 24px;
+  box-shadow: var(--card-shadow);
+  border-left: 4px solid transparent;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.stat-card:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.1); }
+.stat-card.entrada { border-color: var(--entrada); }
+.stat-card.saida   { border-color: var(--saida); }
+.stat-card.saldo   { border-color: #2980b9; }
+.stat-card.dizimo  { border-color: var(--warning); }
+
+.stat-label {
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7f8c9a;
+  margin-bottom: 6px;
+}
+
+.stat-value {
+  font-size: 1.6rem;
+  font-weight: 700;
+  color: #1a2e3b;
+  line-height: 1.2;
+}
+
+.stat-sub { font-size: 0.78rem; color: #95a5a6; margin-top: 4px; }
+.stat-icon {
+  font-size: 2rem;
+  opacity: 0.15;
+  position: absolute;
+  right: 20px; top: 50%;
+  transform: translateY(-50%);
+}
+
+/* ── CHART CARDS ── */
+.chart-card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 24px;
+  box-shadow: var(--card-shadow);
+  height: 100%;
+}
+
+.chart-card .card-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #5d6d7e;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: 16px;
+}
+
+/* ── TABLES ── */
+.table-card {
+  background: #fff;
+  border-radius: var(--radius);
+  box-shadow: var(--card-shadow);
+  overflow: hidden;
+}
+
+.table-card .table-header {
+  padding: 18px 24px;
+  border-bottom: 1px solid #eef0f4;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.table-card .table-header h6 {
+  font-weight: 600;
+  margin: 0;
+  font-size: 0.92rem;
+  color: var(--primary);
+}
+
+.table { margin: 0; }
+.table th {
+  font-size: 0.72rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #7f8c9a;
+  background: #f8fafc;
+  border-bottom: 2px solid #eef0f4;
+  padding: 10px 16px;
+}
+
+.table td {
+  padding: 10px 16px;
+  font-size: 0.85rem;
+  border-bottom: 1px solid #f2f4f7;
+  vertical-align: middle;
+}
+
+.table tbody tr:hover { background: #f8fafc; }
+
+/* ── BADGES ── */
+.badge-entrada { background: #d5f5e3; color: #1e8449; font-weight: 600; }
+.badge-saida   { background: #fadbd8; color: #922b21; font-weight: 600; }
+
+/* ── LIVRO BADGES ── */
+.livro-FundoLocal  { background: #d6eaf8; color: #1a5276; }
+.livro-Projetos    { background: #fdebd0; color: #784212; }
+.livro-Envios      { background: #d5f5e3; color: #1e8449; }
+.livro-LiqDízimos  { background: #f5eef8; color: #6c3483; }
+
+/* ── FORMS ── */
+.form-card {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 28px;
+  box-shadow: var(--card-shadow);
+}
+
+.form-card .form-section-title {
+  font-size: 0.75rem;
+  font-weight: 700;
+  color: #7f8c9a;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 2px solid #eef0f4;
+}
+
+.form-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #5d6d7e;
+  margin-bottom: 4px;
+}
+
+.form-control, .form-select {
+  border: 1px solid #dde2ea;
+  border-radius: 8px;
+  font-size: 0.88rem;
+  padding: 8px 12px;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.form-control:focus, .form-select:focus {
+  border-color: var(--sidebar-active);
+  box-shadow: 0 0 0 3px rgba(41,128,185,0.12);
+}
+
+/* ── BUTTONS ── */
+.btn-primary-custom {
+  background: var(--primary);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 9px 22px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  transition: all 0.2s;
+}
+.btn-primary-custom:hover { background: #1a3a5c; color: #fff; transform: translateY(-1px); }
+
+/* ── PROGRESS BARS ── */
+.progress { height: 8px; border-radius: 4px; background: #eef0f4; }
+.progress-bar { border-radius: 4px; transition: width 0.6s ease; }
+.progress-bar.over { background: var(--saida) !important; }
+
+/* ── DIZIMO CALC BOX ── */
+.dizimo-result {
+  background: linear-gradient(135deg, #0f2744, #1a5276);
+  color: #fff;
+  border-radius: var(--radius);
+  padding: 24px;
+}
+
+.dizimo-result .dr-label { font-size: 0.75rem; opacity: 0.7; text-transform: uppercase; }
+.dizimo-result .dr-value { font-size: 1.3rem; font-weight: 700; }
+
+/* ── FILTER BAR ── */
+.filter-bar {
+  background: #fff;
+  border-radius: var(--radius);
+  padding: 18px 24px;
+  margin-bottom: 20px;
+  box-shadow: var(--card-shadow);
+}
+
+/* ── RESPONSIVE ── */
+@media (max-width: 768px) {
+  .sidebar { transform: translateX(calc(-1 * var(--sidebar-width))); }
+  .sidebar.open { transform: translateX(0); }
+  .main-content { margin-left: 0; }
+  .page-content { padding: 16px; }
+  .stat-value { font-size: 1.3rem; }
+}
+
+/* ── UTILS ── */
+.text-entrada { color: var(--entrada) !important; }
+.text-saida   { color: var(--saida) !important; }
+.fw-semibold  { font-weight: 600; }
+.rounded-xl   { border-radius: var(--radius) !important; }

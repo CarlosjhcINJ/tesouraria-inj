@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+{% block title %}Configurações — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Configurações</li>{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="page-title">Configurações</h1>
+  <p class="text-muted mb-0 small">Dados da congregação e parâmetros do sistema</p>
+</div>
+
+<form method="POST">
+  <div class="row g-4">
+    <!-- ── Dados da Congregação ── -->
+    <div class="col-lg-6">
+      <div class="form-card h-100">
+        <div class="form-section-title">
+          <i class="bi bi-building me-2"></i>Dados da Congregação
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Nome da Congregação</label>
+          <input type="text" name="nome_congregacao" class="form-control"
+                 value="{{ cfg.get('nome_congregacao', '') }}"
+                 placeholder="Igreja do Nome de Jesus"/>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label"><i class="bi bi-person-circle me-1"></i>Nome do Pastor</label>
+          <input type="text" name="nome_pastor" class="form-control"
+                 value="{{ cfg.get('nome_pastor', '') }}" placeholder="Nome completo"/>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label"><i class="bi bi-person-check me-1"></i>Nome do Tesoureiro</label>
+          <input type="text" name="nome_tesoureiro" class="form-control"
+                 value="{{ cfg.get('nome_tesoureiro', '') }}" placeholder="Nome completo"/>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label"><i class="bi bi-person me-1"></i>Auxiliar de Tesouraria</label>
+          <input type="text" name="nome_auxiliar" class="form-control"
+                 value="{{ cfg.get('nome_auxiliar', '') }}" placeholder="Nome completo"/>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Parâmetros Financeiros ── -->
+    <div class="col-lg-6">
+      <div class="form-card">
+        <div class="form-section-title">
+          <i class="bi bi-sliders me-2"></i>Parâmetros Financeiros
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-6">
+            <label class="form-label">Ano Atual</label>
+            <select name="ano_atual" class="form-select">
+              {% for a in anos %}
+                <option value="{{ a }}" {% if a == cfg.get('ano_atual', '') | int %}selected{% endif %}>{{ a }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-6">
+            <label class="form-label">Saldo Ano Anterior (R$)</label>
+            <div class="input-group">
+              <span class="input-group-text">R$</span>
+              <input type="number" name="saldo_ano_anterior" class="form-control"
+                     step="0.01" value="{{ cfg.get('saldo_ano_anterior', '0') }}"/>
+            </div>
+          </div>
+        </div>
+
+        <div class="alert alert-info py-2 px-3 mb-3" style="font-size:0.82rem">
+          <i class="bi bi-info-circle me-1"></i>
+          As porcentagens abaixo são usadas para o cálculo automático da liquidação de dízimos.
+        </div>
+
+        <div class="row g-3 mb-3">
+          <div class="col-6">
+            <label class="form-label">% Envío Nacional</label>
+            <div class="input-group">
+              <input type="number" name="pct_nacional" class="form-control"
+                     step="0.01" min="0" max="1"
+                     value="{{ cfg.get('pct_nacional', '0.15') }}"/>
+              <span class="input-group-text">
+                {{ "%.0f" | format(cfg.get('pct_nacional', '0.15') | float * 100) }}%
+              </span>
+            </div>
+          </div>
+          <div class="col-6">
+            <label class="form-label">% Fundo Local</label>
+            <div class="input-group">
+              <input type="number" name="pct_fundo_local" class="form-control"
+                     step="0.01" min="0" max="1"
+                     value="{{ cfg.get('pct_fundo_local', '0.03') }}"/>
+              <span class="input-group-text">
+                {{ "%.0f" | format(cfg.get('pct_fundo_local', '0.03') | float * 100) }}%
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Preview distribuição dízimos -->
+        <div class="p-3 rounded-xl" style="background:#f8fafc; border:1px solid #eef0f4">
+          <div class="small fw-semibold mb-2 text-muted">Distribuição para R$ 1.000,00</div>
+          {% set pn = cfg.get('pct_nacional', '0.15') | float %}
+          {% set pf = cfg.get('pct_fundo_local', '0.03') | float %}
+          <div class="d-flex justify-content-between small">
+            <span>Envío Nacional ({{ "%.0f" | format(pn * 100) }}%)</span>
+            <span class="text-danger fw-semibold">- {{ (1000 * pn) | brl }}</span>
+          </div>
+          <div class="d-flex justify-content-between small">
+            <span>Fundo Local ({{ "%.0f" | format(pf * 100) }}%)</span>
+            <span class="text-danger fw-semibold">- {{ (1000 * pf) | brl }}</span>
+          </div>
+          <hr class="my-1"/>
+          <div class="d-flex justify-content-between small fw-bold">
+            <span>Líquido Pastor</span>
+            <span class="text-success">{{ (1000 * (1 - pn - pf)) | brl }}</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ── Informações do sistema ── -->
+    <div class="col-12">
+      <div class="form-card">
+        <div class="form-section-title"><i class="bi bi-info-circle me-2"></i>Sobre o Sistema</div>
+        <div class="row g-3">
+          <div class="col-md-4">
+            <div class="p-3 rounded-xl text-center" style="background:#d6eaf8">
+              <i class="bi bi-bank2 fs-2 text-primary d-block mb-2"></i>
+              <div class="fw-semibold">Tesouraria INJ</div>
+              <div class="small text-muted">Sistema de Gestão Financeira Local</div>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="p-3 rounded-xl" style="background:#f8fafc; border:1px solid #eef0f4">
+              <div class="small fw-semibold mb-2">Livros Contábeis</div>
+              <ul class="small text-muted mb-0 ps-3">
+                <li>Fundo Local</li>
+                <li>Projetos</li>
+                <li>Envios / Missões</li>
+                <li>Liquidação de Dízimos</li>
+              </ul>
+            </div>
+          </div>
+          <div class="col-md-4">
+            <div class="p-3 rounded-xl" style="background:#f8fafc; border:1px solid #eef0f4">
+              <div class="small fw-semibold mb-2">Funcionalidades</div>
+              <ul class="small text-muted mb-0 ps-3">
+                <li>Dashboard com gráficos</li>
+                <li>Lançamentos e extrato</li>
+                <li>Cálculo de dízimos</li>
+                <li>Orçamento vs realizado</li>
+                <li>Exportar para Excel</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Botão salvar ── -->
+  <div class="mt-4 d-flex gap-3">
+    <button type="submit" class="btn btn-primary-custom px-5">
+      <i class="bi bi-save me-2"></i>Salvar Configurações
+    </button>
+    <a href="{{ url_for('dashboard') }}" class="btn btn-outline-secondary px-4">
+      <i class="bi bi-x-lg me-1"></i>Cancelar
+    </a>
+  </div>
+</form>
+{% endblock %}

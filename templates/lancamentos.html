@@ -1,0 +1,217 @@
+{% extends 'base.html' %}
+{% block title %}Lançamentos — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Lançamentos</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="page-title">Lançamentos</h1>
+    <p class="text-muted mb-0 small">Registre e gerencie entradas e saídas</p>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- ── Formulário Novo Lançamento ── -->
+  <div class="col-lg-4">
+    <div class="form-card h-100">
+      <div class="form-section-title"><i class="bi bi-plus-circle me-2"></i>Novo Lançamento</div>
+      <form method="POST" id="formLancamento">
+
+        <div class="mb-3">
+          <label class="form-label">Livro Contábil</label>
+          <select name="livro" id="livroSelect" class="form-select" required>
+            <option value="">— Selecione o livro —</option>
+            {% for livro in livros %}
+              <option value="{{ livro }}">{{ livros_labels[livro] }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Tipo</label>
+          <select name="tipo" id="tipoSelect" class="form-select" required>
+            <option value="">— Selecione —</option>
+            <option value="Entrada">Entrada</option>
+            <option value="Saída">Saída</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Item / Categoria</label>
+          <select name="item" id="itemSelect" class="form-select" required>
+            <option value="">— Selecione livro e tipo primeiro —</option>
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Valor (R$)</label>
+          <div class="input-group">
+            <span class="input-group-text">R$</span>
+            <input type="text" name="valor" class="form-control"
+                   placeholder="0,00" required oninput="formatBRL(this)"/>
+          </div>
+        </div>
+
+        <div class="row g-2 mb-3">
+          <div class="col-7">
+            <label class="form-label">Mês</label>
+            <select name="mes" class="form-select" required>
+              <option value="">— Mês —</option>
+              {% for m in meses %}
+                <option value="{{ m }}" {% if m == mes_sel %}selected{% endif %}>{{ m | capitalize }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-5">
+            <label class="form-label">Ano</label>
+            <select name="ano" class="form-select" required>
+              {% for a in anos %}
+                <option value="{{ a }}" {% if a == ano_sel %}selected{% endif %}>{{ a }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Data do Registro</label>
+          <input type="text" name="data_registro" class="form-control"
+                 placeholder="dd/mm/aaaa"
+                 value="{{ now().strftime('%d/%m/%Y') }}"/>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label">Observação</label>
+          <input type="text" name="obs" class="form-control" placeholder="Opcional..."/>
+        </div>
+
+        <button type="submit" class="btn btn-primary-custom w-100">
+          <i class="bi bi-save me-2"></i>Registrar Lançamento
+        </button>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Tabela de Lançamentos ── -->
+  <div class="col-lg-8">
+    <!-- Filtros -->
+    <div class="filter-bar mb-3">
+      <form method="GET" class="row g-2 align-items-end">
+        <div class="col-sm-4">
+          <label class="form-label mb-1">Mês</label>
+          <select name="mes" class="form-select form-select-sm">
+            <option value="">Todos</option>
+            {% for m in meses %}
+              <option value="{{ m }}" {% if m == mes_sel %}selected{% endif %}>{{ m | capitalize }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-3">
+          <label class="form-label mb-1">Ano</label>
+          <select name="ano" class="form-select form-select-sm">
+            {% for a in anos %}
+              <option value="{{ a }}" {% if a == ano_sel %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-sm-3">
+          <button type="submit" class="btn btn-sm btn-primary w-100">
+            <i class="bi bi-funnel me-1"></i>Filtrar
+          </button>
+        </div>
+        <div class="col-sm-2">
+          <a href="{{ url_for('exportar_excel', ano=ano_sel) }}" class="btn btn-sm btn-success w-100">
+            <i class="bi bi-file-earmark-excel me-1"></i>Excel
+          </a>
+        </div>
+      </form>
+    </div>
+
+    <!-- Totalizadores -->
+    <div class="row g-2 mb-3">
+      <div class="col-4">
+        <div class="p-3 rounded-xl" style="background:#d5f5e3; border-left:4px solid #27ae60">
+          <div class="small text-muted">Entradas</div>
+          <div class="fw-bold text-entrada">{{ total_e | brl }}</div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="p-3 rounded-xl" style="background:#fadbd8; border-left:4px solid #e74c3c">
+          <div class="small text-muted">Saídas</div>
+          <div class="fw-bold text-saida">{{ total_s | brl }}</div>
+        </div>
+      </div>
+      <div class="col-4">
+        <div class="p-3 rounded-xl" style="background:#d6eaf8; border-left:4px solid #2980b9">
+          <div class="small text-muted">Saldo</div>
+          {% set saldo = total_e - total_s %}
+          <div class="fw-bold {% if saldo >= 0 %}text-entrada{% else %}text-saida{% endif %}">{{ saldo | brl }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="table-card">
+      <div class="table-header">
+        <h6><i class="bi bi-list-ul me-2"></i>{{ transacoes | length }} lançamento(s)</h6>
+      </div>
+      <div class="table-responsive" style="max-height:500px; overflow-y:auto">
+        <table class="table table-hover mb-0">
+          <thead style="position:sticky;top:0">
+            <tr>
+              <th>#</th><th>Livro</th><th>Tipo</th><th>Item</th>
+              <th class="text-end">Valor</th><th>Mês</th><th>Data</th><th>Obs</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {% for t in transacoes %}
+            <tr>
+              <td class="text-muted small">{{ t['id'] }}</td>
+              <td>
+                <span class="badge rounded-pill livro-{{ t['livro'] }}" style="font-size:0.65rem">
+                  {{ t['livro'] }}
+                </span>
+              </td>
+              <td>
+                <span class="badge {% if t['tipo']=='Entrada' %}badge-entrada{% else %}badge-saida{% endif %} rounded-pill px-2" style="font-size:0.68rem">
+                  {{ t['tipo'] }}
+                </span>
+              </td>
+              <td class="small">{{ t['item'] }}</td>
+              <td class="text-end fw-semibold {% if t['tipo']=='Entrada' %}text-entrada{% else %}text-saida{% endif %}">
+                {{ t['valor'] | brl }}
+              </td>
+              <td class="small">{{ t['mes'] | capitalize }}</td>
+              <td class="small text-muted">{{ t['data_registro'] or '—' }}</td>
+              <td class="small text-muted" style="max-width:100px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="{{ t['obs'] or '' }}">
+                {{ t['obs'] or '' }}
+              </td>
+              <td>
+                <div class="d-flex gap-1">
+                  <a href="{{ url_for('editar_lancamento', tid=t['id']) }}"
+                     class="btn btn-xs btn-outline-secondary" style="padding:2px 8px; font-size:0.75rem">
+                    <i class="bi bi-pencil"></i>
+                  </a>
+                  <form method="POST" action="{{ url_for('deletar_lancamento', tid=t['id']) }}"
+                        onsubmit="return confirmarExclusao(this, 'Excluir lançamento de {{ t['valor'] | brl }}?')">
+                    <button type="submit" class="btn btn-xs btn-outline-danger" style="padding:2px 8px; font-size:0.75rem">
+                      <i class="bi bi-trash"></i>
+                    </button>
+                  </form>
+                </div>
+              </td>
+            </tr>
+            {% else %}
+            <tr>
+              <td colspan="9" class="text-center text-muted py-5">
+                <i class="bi bi-inbox fs-3 d-block mb-2 opacity-25"></i>
+                Nenhum lançamento encontrado.
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

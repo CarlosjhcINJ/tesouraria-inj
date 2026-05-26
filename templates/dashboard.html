@@ -1,0 +1,166 @@
+{% extends 'base.html' %}
+{% block title %}Dashboard — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Dashboard</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="page-title">Dashboard</h1>
+    <p class="text-muted mb-0 small">Visão geral financeira da congregação</p>
+  </div>
+  <form class="d-flex gap-2 align-items-center">
+    <label class="form-label mb-0 small fw-semibold">Ano:</label>
+    <select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
+      {% for a in anos %}
+        <option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<!-- ── Stat Cards ── -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3">
+    <div class="stat-card entrada position-relative">
+      <div class="stat-label">Total Entradas</div>
+      <div class="stat-value text-entrada">{{ total_e | brl }}</div>
+      <div class="stat-sub">Ano {{ ano }}</div>
+      <i class="bi bi-arrow-down-circle stat-icon text-success"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card saida position-relative">
+      <div class="stat-label">Total Saídas</div>
+      <div class="stat-value text-saida">{{ total_s | brl }}</div>
+      <div class="stat-sub">Ano {{ ano }}</div>
+      <i class="bi bi-arrow-up-circle stat-icon text-danger"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card saldo position-relative">
+      <div class="stat-label">Saldo Atual</div>
+      <div class="stat-value" style="color:#1a5276">{{ saldo | brl }}</div>
+      <div class="stat-sub">Inclui saldo anterior: {{ saldo_ant | brl }}</div>
+      <i class="bi bi-wallet2 stat-icon text-primary"></i>
+    </div>
+  </div>
+  <div class="col-6 col-lg-3">
+    <div class="stat-card dizimo position-relative">
+      <div class="stat-label">Superávit / Déficit</div>
+      {% set superavit = total_e - total_s %}
+      <div class="stat-value {% if superavit >= 0 %}text-entrada{% else %}text-saida{% endif %}">
+        {{ superavit | brl }}
+      </div>
+      {% if total_e > 0 %}
+        <div class="stat-sub">{{ "%.1f" | format(superavit / total_e * 100) }}% do total</div>
+      {% endif %}
+      <i class="bi bi-graph-up stat-icon text-warning"></i>
+    </div>
+  </div>
+</div>
+
+<!-- ── Por Livro ── -->
+<div class="row g-3 mb-4">
+  {% for livro in por_livro %}
+  <div class="col-6 col-lg-3">
+    <div class="table-card p-3">
+      <div class="d-flex align-items-center gap-2 mb-2">
+        <span class="badge rounded-pill livro-{{ livro['livro'] }} px-2 py-1" style="font-size:0.7rem">
+          {{ livros_labels.get(livro['livro'], livro['livro']) }}
+        </span>
+      </div>
+      <div class="d-flex justify-content-between mb-1">
+        <span class="small text-muted">Entradas</span>
+        <span class="small fw-semibold text-entrada">{{ livro['entradas'] | brl }}</span>
+      </div>
+      <div class="d-flex justify-content-between">
+        <span class="small text-muted">Saídas</span>
+        <span class="small fw-semibold text-saida">{{ livro['saidas'] | brl }}</span>
+      </div>
+      {% set saldo_livro = livro['entradas'] - livro['saidas'] %}
+      <hr class="my-2"/>
+      <div class="d-flex justify-content-between">
+        <span class="small fw-semibold">Saldo</span>
+        <span class="small fw-bold {% if saldo_livro >= 0 %}text-entrada{% else %}text-saida{% endif %}">
+          {{ saldo_livro | brl }}
+        </span>
+      </div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- ── Gráficos ── -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-7">
+    <div class="chart-card">
+      <div class="card-title">Fluxo de Caixa Mensal — {{ ano }}</div>
+      <div style="height:260px">
+        <canvas id="fluxoChart"></canvas>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="chart-card">
+      <div class="card-title">Top Saídas por Categoria</div>
+      <div style="height:260px">
+        <canvas id="pizzaChart"></canvas>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ── Últimos lançamentos ── -->
+<div class="table-card">
+  <div class="table-header">
+    <h6><i class="bi bi-clock-history me-2 text-primary"></i>Últimos Lançamentos</h6>
+    <a href="{{ url_for('lancamentos', ano=ano) }}" class="btn btn-sm btn-outline-primary">
+      Ver todos <i class="bi bi-arrow-right"></i>
+    </a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>#</th><th>Livro</th><th>Tipo</th><th>Item</th>
+          <th class="text-end">Valor</th><th>Mês</th><th>Data</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for t in recentes %}
+        <tr>
+          <td class="text-muted small">{{ t['id'] }}</td>
+          <td>
+            <span class="badge rounded-pill livro-{{ t['livro'] }}" style="font-size:0.68rem">
+              {{ livros_labels.get(t['livro'], t['livro']) }}
+            </span>
+          </td>
+          <td>
+            <span class="badge {% if t['tipo']=='Entrada' %}badge-entrada{% else %}badge-saida{% endif %} rounded-pill px-2" style="font-size:0.72rem">
+              {{ t['tipo'] }}
+            </span>
+          </td>
+          <td class="small">{{ t['item'] }}</td>
+          <td class="text-end fw-semibold {% if t['tipo']=='Entrada' %}text-entrada{% else %}text-saida{% endif %}">
+            {{ t['valor'] | brl }}
+          </td>
+          <td class="small text-muted">{{ t['mes'] | capitalize }}</td>
+          <td class="small text-muted">{{ t['data_registro'] or '—' }}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="7" class="text-center text-muted py-4">Nenhum lançamento encontrado para {{ ano }}.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+  const fluxoData  = {{ fluxo_mensal | safe }};
+  const topSaidas  = {{ top_saidas | safe }};
+  renderFluxoChart('fluxoChart', fluxoData);
+  renderPizzaChart('pizzaChart', topSaidas);
+</script>
+{% endblock %}

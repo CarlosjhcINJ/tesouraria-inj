@@ -1,0 +1,214 @@
+{% extends 'base.html' %}
+{% block title %}Orçamento — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Orçamento</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="page-title">Orçamento</h1>
+    <p class="text-muted mb-0 small">Planejado vs realizado por categoria</p>
+  </div>
+  <form class="d-flex gap-2 align-items-center">
+    <label class="form-label mb-0 small fw-semibold">Ano:</label>
+    <select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
+      {% for a in anos %}
+        <option value="{{ a }}" {% if a == ano_sel %}selected{% endif %}>{{ a }}</option>
+      {% endfor %}
+    </select>
+  </form>
+</div>
+
+<!-- Tabs -->
+<ul class="nav nav-tabs mb-4" id="orcTabs">
+  <li class="nav-item">
+    <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tabComparativo">
+      <i class="bi bi-bar-chart me-1"></i>Comparativo
+    </button>
+  </li>
+  <li class="nav-item">
+    <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tabDefinir">
+      <i class="bi bi-pencil-square me-1"></i>Definir Orçamento
+    </button>
+  </li>
+</ul>
+
+<div class="tab-content">
+  <!-- ── Comparativo ── -->
+  <div class="tab-pane fade show active" id="tabComparativo">
+    <div class="row g-4">
+      <!-- Entradas -->
+      <div class="col-lg-6">
+        <div class="table-card">
+          <div class="table-header" style="background:#d5f5e3">
+            <h6 class="text-success"><i class="bi bi-arrow-down-circle me-2"></i>Entradas — {{ ano_sel }}</h6>
+          </div>
+          <div class="p-3">
+            {% if comparativo_e %}
+              {% for r in comparativo_e | sort(attribute='item') %}
+              <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                  <span class="small fw-semibold">{{ r.item }}</span>
+                  <span class="small text-muted">{{ r.real | brl }} / {{ r.orcado | brl }}</span>
+                </div>
+                <div class="progress">
+                  <div class="progress-bar bg-success {% if r.pct > 100 %}over{% endif %}"
+                       style="width:{{ [r.pct, 100] | min }}%"
+                       title="{{ r.pct }}%"></div>
+                </div>
+                <div class="small text-muted mt-1">{{ r.pct }}% do orçado</div>
+              </div>
+              {% endfor %}
+            {% else %}
+              <div class="text-center text-muted py-4">
+                <i class="bi bi-inbox fs-2 d-block mb-2 opacity-25"></i>
+                Nenhum dado de entrada. Defina o orçamento ou registre lançamentos.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+
+      <!-- Saídas -->
+      <div class="col-lg-6">
+        <div class="table-card">
+          <div class="table-header" style="background:#fadbd8">
+            <h6 class="text-danger"><i class="bi bi-arrow-up-circle me-2"></i>Saídas — {{ ano_sel }}</h6>
+          </div>
+          <div class="p-3">
+            {% if comparativo_s %}
+              {% for r in comparativo_s | sort(attribute='item') %}
+              <div class="mb-3">
+                <div class="d-flex justify-content-between mb-1">
+                  <span class="small fw-semibold">{{ r.item }}</span>
+                  <div class="text-end">
+                    <span class="small {% if r.pct > 100 %}text-danger fw-bold{% else %}text-muted{% endif %}">
+                      {{ r.real | brl }} / {{ r.orcado | brl }}
+                    </span>
+                  </div>
+                </div>
+                <div class="progress">
+                  <div class="progress-bar {% if r.pct > 100 %}over{% else %}bg-danger{% endif %}"
+                       style="width:{{ [r.pct, 100] | min }}%"
+                       title="{{ r.pct }}%"></div>
+                </div>
+                <div class="small {% if r.pct > 100 %}text-danger fw-semibold{% else %}text-muted{% endif %} mt-1">
+                  {{ r.pct }}% do orçado {% if r.pct > 100 %}<i class="bi bi-exclamation-triangle-fill"></i>{% endif %}
+                </div>
+              </div>
+              {% endfor %}
+            {% else %}
+              <div class="text-center text-muted py-4">
+                <i class="bi bi-inbox fs-2 d-block mb-2 opacity-25"></i>
+                Nenhum dado de saída. Defina o orçamento ou registre lançamentos.
+              </div>
+            {% endif %}
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Definir Orçamento ── -->
+  <div class="tab-pane fade" id="tabDefinir">
+    <div class="form-card">
+      <div class="form-section-title">
+        <i class="bi bi-pencil-square me-2"></i>Definir Metas Orçamentárias — {{ ano_sel }}
+      </div>
+      <form method="POST" action="{{ url_for('orcamento', ano=ano_sel) }}">
+
+        <div class="row g-4">
+          <!-- Entradas -->
+          <div class="col-lg-6">
+            <h6 class="text-success mb-3"><i class="bi bi-plus-circle me-2"></i>Entradas</h6>
+            <div class="table-responsive">
+              <table class="table table-sm">
+                <thead><tr><th>Item</th><th>Orc. Anual</th><th>Orc. Mensal</th></tr></thead>
+                <tbody>
+                {% set all_entrada_items = [] %}
+                {% for livro, cats in categorias.items() %}
+                  {% for item in cats.get('Entrada', []) %}
+                    {% if item not in all_entrada_items %}
+                      {% set _ = all_entrada_items.append(item) %}
+                    {% endif %}
+                  {% endfor %}
+                {% endfor %}
+                {% for item in all_entrada_items | sort %}
+                  {% set orc = orc_map.get((item, 'Entrada')) %}
+                  <tr>
+                    <td class="small">
+                      {{ item }}
+                      <input type="hidden" name="item[]"     value="{{ item }}"/>
+                      <input type="hidden" name="tipo[]"     value="Entrada"/>
+                      <input type="hidden" name="ano[]"      value="{{ ano_sel }}"/>
+                    </td>
+                    <td>
+                      <input type="number" name="orcam_ano[]" class="form-control form-control-sm"
+                             step="0.01" min="0" style="width:100px"
+                             value="{{ orc.orcam_ano if orc else '' }}" placeholder="0"/>
+                    </td>
+                    <td>
+                      <input type="number" name="orcam_mes[]" class="form-control form-control-sm"
+                             step="0.01" min="0" style="width:100px"
+                             value="{{ orc.orcam_mes if orc else '' }}" placeholder="0"/>
+                    </td>
+                  </tr>
+                  <input type="hidden" name="obs[]" value="{{ orc.observacao if orc else '' }}"/>
+                {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <!-- Saídas -->
+          <div class="col-lg-6">
+            <h6 class="text-danger mb-3"><i class="bi bi-dash-circle me-2"></i>Saídas</h6>
+            <div class="table-responsive">
+              <table class="table table-sm">
+                <thead><tr><th>Item</th><th>Orc. Anual</th><th>Orc. Mensal</th></tr></thead>
+                <tbody>
+                {% set all_saida_items = [] %}
+                {% for livro, cats in categorias.items() %}
+                  {% for item in cats.get('Saída', []) %}
+                    {% if item not in all_saida_items %}
+                      {% set _ = all_saida_items.append(item) %}
+                    {% endif %}
+                  {% endfor %}
+                {% endfor %}
+                {% for item in all_saida_items | sort %}
+                  {% set orc = orc_map.get((item, 'Saída')) %}
+                  <tr>
+                    <td class="small">
+                      {{ item }}
+                      <input type="hidden" name="item[]"     value="{{ item }}"/>
+                      <input type="hidden" name="tipo[]"     value="Saída"/>
+                      <input type="hidden" name="ano[]"      value="{{ ano_sel }}"/>
+                    </td>
+                    <td>
+                      <input type="number" name="orcam_ano[]" class="form-control form-control-sm"
+                             step="0.01" min="0" style="width:100px"
+                             value="{{ orc.orcam_ano if orc else '' }}" placeholder="0"/>
+                    </td>
+                    <td>
+                      <input type="number" name="orcam_mes[]" class="form-control form-control-sm"
+                             step="0.01" min="0" style="width:100px"
+                             value="{{ orc.orcam_mes if orc else '' }}" placeholder="0"/>
+                    </td>
+                  </tr>
+                  <input type="hidden" name="obs[]" value="{{ orc.observacao if orc else '' }}"/>
+                {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div class="mt-4 pt-3 border-top">
+          <button type="submit" class="btn btn-primary-custom px-5">
+            <i class="bi bi-save me-2"></i>Salvar Orçamento {{ ano_sel }}
+          </button>
+        </div>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

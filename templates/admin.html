@@ -1,0 +1,130 @@
+{% extends 'base.html' %}
+{% block title %}Admin — Congregações{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Administrador</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4">
+  <div>
+    <h1 class="page-title">Painel do Administrador</h1>
+    <p class="text-muted mb-0 small">Gerencie as congregações cadastradas no sistema</p>
+  </div>
+  <a href="{{ url_for('admin_nova_cong') }}" class="btn btn-primary-custom">
+    <i class="bi bi-plus-circle me-2"></i>Nova Congregação
+  </a>
+</div>
+
+<div class="table-card">
+  <div class="table-header">
+    <h6><i class="bi bi-buildings me-2 text-primary"></i>Congregações ({{ congs | length }})</h6>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-hover mb-0">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Congregação</th>
+          <th>Usuário</th>
+          <th>Tipo</th>
+          <th>Status</th>
+          <th>Criado em</th>
+          <th>Ações</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for c in congs %}
+        <tr>
+          <td class="text-muted small">{{ c['id'] }}</td>
+          <td class="fw-semibold">{{ c['nome'] }}</td>
+          <td><code class="small">{{ c['usuario'] }}</code></td>
+          <td>
+            {% if c['is_admin'] %}
+              <span class="badge bg-danger rounded-pill px-2">Admin</span>
+            {% else %}
+              <span class="badge bg-secondary rounded-pill px-2">Congregação</span>
+            {% endif %}
+          </td>
+          <td>
+            {% if c['ativo'] %}
+              <span class="badge badge-entrada rounded-pill px-2">Ativo</span>
+            {% else %}
+              <span class="badge badge-saida rounded-pill px-2">Inativo</span>
+            {% endif %}
+          </td>
+          <td class="small text-muted">{{ c['criado_em'][:10] if c['criado_em'] else '—' }}</td>
+          <td>
+            <div class="d-flex gap-1 align-items-center">
+              <!-- Reset senha -->
+              <button class="btn btn-xs btn-outline-warning"
+                      style="padding:3px 8px; font-size:0.72rem"
+                      data-bs-toggle="modal"
+                      data-bs-target="#modalSenha{{ c['id'] }}">
+                <i class="bi bi-key"></i>
+              </button>
+
+              <!-- Ativar/Desativar (não pode desativar o próprio admin) -->
+              {% if c['usuario'] != 'admin' %}
+              <form method="POST" action="{{ url_for('admin_toggle_cong', cid=c['id']) }}">
+                <button class="btn btn-xs {% if c['ativo'] %}btn-outline-secondary{% else %}btn-outline-success{% endif %}"
+                        style="padding:3px 8px; font-size:0.72rem"
+                        title="{{ 'Desativar' if c['ativo'] else 'Ativar' }}">
+                  <i class="bi bi-{% if c['ativo'] %}pause{% else %}play{% endif %}-circle"></i>
+                </button>
+              </form>
+              {% endif %}
+            </div>
+
+            <!-- Modal Reset Senha -->
+            <div class="modal fade" id="modalSenha{{ c['id'] }}" tabindex="-1">
+              <div class="modal-dialog modal-sm">
+                <div class="modal-content">
+                  <div class="modal-header">
+                    <h6 class="modal-title">Redefinir senha — {{ c['nome'] }}</h6>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                  </div>
+                  <form method="POST" action="{{ url_for('admin_reset_senha', cid=c['id']) }}">
+                    <div class="modal-body">
+                      <label class="form-label small">Nova Senha</label>
+                      <input type="password" name="nova_senha" class="form-control form-control-sm"
+                             placeholder="Mínimo 6 caracteres" required minlength="6"/>
+                    </div>
+                    <div class="modal-footer">
+                      <button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                      <button type="submit" class="btn btn-sm btn-warning">Redefinir</button>
+                    </div>
+                  </form>
+                </div>
+              </div>
+            </div>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Instruções -->
+<div class="form-card mt-4">
+  <div class="form-section-title"><i class="bi bi-info-circle me-2"></i>Como compartilhar com uma congregação</div>
+  <div class="row g-3">
+    <div class="col-md-4">
+      <div class="p-3 rounded-xl" style="background:#d6eaf8; border-left:4px solid #2980b9">
+        <div class="fw-semibold mb-1"><i class="bi bi-1-circle me-1 text-primary"></i> Criar conta</div>
+        <div class="small text-muted">Clique em "Nova Congregação", defina um usuário e senha para a congregação.</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="p-3 rounded-xl" style="background:#d5f5e3; border-left:4px solid #27ae60">
+        <div class="fw-semibold mb-1"><i class="bi bi-2-circle me-1 text-success"></i> Compartilhar o link</div>
+        <div class="small text-muted">Envie o link do sistema + usuário + senha para o tesoureiro da congregação.</div>
+      </div>
+    </div>
+    <div class="col-md-4">
+      <div class="p-3 rounded-xl" style="background:#fdebd0; border-left:4px solid #f39c12">
+        <div class="fw-semibold mb-1"><i class="bi bi-3-circle me-1 text-warning"></i> Dados separados</div>
+        <div class="small text-muted">Cada congregação vê apenas seus próprios lançamentos, dízimos e orçamento.</div>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

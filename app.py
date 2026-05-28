@@ -703,6 +703,11 @@ def configuracoes():
 # ─────────────────────────────────────────────
 #  MINHA CONTA (trocar senha)
 # ─────────────────────────────────────────────
+@app.route('/tutorial')
+@login_required
+def tutorial():
+    return render_template('tutorial.html', cfg=get_cfg())
+
 @app.route('/minha-conta', methods=['GET', 'POST'])
 @login_required
 def minha_conta():

@@ -59,6 +59,9 @@
     <a href="{{ url_for('minha_conta') }}" class="nav-item {% if request.endpoint == 'minha_conta' %}active{% endif %}">
       <i class="bi bi-person-gear"></i> Minha Conta
     </a>
+    <a href="{{ url_for('tutorial') }}" class="nav-item {% if request.endpoint == 'tutorial' %}active{% endif %}">
+      <i class="bi bi-book"></i> Tutorial
+    </a>
   </nav>
 
   <div class="sidebar-footer">

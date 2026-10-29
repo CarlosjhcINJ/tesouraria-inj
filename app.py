@@ -31,7 +31,8 @@ app.config.update(
 
 ANOS = list(range(2020, 2035))
 MAX_ANEXO = 5 * 1024 * 1024
-TIPOS_ANEXO = {'application/pdf', 'image/jpeg', 'image/png', 'image/webp', 'image/heic'}
+MAX_PDF = 2 * 1024 * 1024
+TIPOS_ANEXO = {'application/pdf', 'image/jpeg', 'image/png', 'image/webp'}
 
 LIVROS = ['FundoLocal', 'Projetos', 'Envios', 'LiqDízimos']
 LIVROS_LABELS = {
@@ -515,17 +516,36 @@ def dashboard():
 # ═════════════════════════════════════════════
 #  LANÇAMENTOS
 # ═════════════════════════════════════════════
+def _comprimir_imagem(dados):
+    """Reduz fotos de comprovante para cerca de 150-300 KB (banco gratuito tem 1 GB)."""
+    from PIL import Image, ImageOps
+    im = Image.open(io.BytesIO(dados))
+    im = ImageOps.exif_transpose(im).convert('RGB')
+    im.thumbnail((1600, 1600))
+    out = io.BytesIO()
+    im.save(out, 'JPEG', quality=70, optimize=True)
+    return out.getvalue()
+
+
 def _ler_anexo(campo):
     f = request.files.get(campo)
     if not f or not f.filename:
         return None
     dados = f.read()
-    if len(dados) > MAX_ANEXO:
-        raise ValueError('O arquivo passa de 5 MB.')
     tipo = f.mimetype or 'application/octet-stream'
     if tipo not in TIPOS_ANEXO:
         raise ValueError('Envie o comprovante em PDF, JPG ou PNG.')
-    return {'nome': os.path.basename(f.filename)[:120], 'tipo': tipo, 'dados': dados}
+    nome = os.path.basename(f.filename)[:120]
+    if tipo.startswith('image/'):
+        try:
+            dados = _comprimir_imagem(dados)
+        except Exception:
+            raise ValueError('Não foi possível ler a imagem. Envie em JPG, PNG ou PDF.')
+        tipo = 'image/jpeg'
+        nome = os.path.splitext(nome)[0] + '.jpg'
+    elif len(dados) > MAX_PDF:
+        raise ValueError('O PDF passa de 2 MB. Envie uma foto do comprovante ou um PDF menor.')
+    return {'nome': nome, 'tipo': tipo, 'dados': dados}
 
 
 @app.route('/lancamentos', methods=['GET', 'POST'])
@@ -1533,6 +1553,9 @@ def criar_admin_cli():
 # ═════════════════════════════════════════════
 #  MAIN
 # ═════════════════════════════════════════════
+if os.environ.get('RENDER') and not db.IS_PG:
+    raise SystemExit('DATABASE_URL não definida: no Render os dados só ficam guardados num banco Postgres '
+                     '(ex.: Neon gratuito). Defina DATABASE_URL antes de publicar.')
 init_db()
 
 if __name__ == '__main__':

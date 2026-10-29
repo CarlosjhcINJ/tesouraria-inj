@@ -1,28 +1,32 @@
 # Como publicar a Tesouraria INJ
 
-## O que mudou e por quê
+## Publicação gratuita (custo zero)
 
-O plano gratuito do Render **apaga o banco de dados** a cada reinício do serviço e põe o
-sistema para dormir depois de 15 minutos sem acesso. Para uso oficial, o sistema agora usa:
+O disco do plano gratuito do Render **é apagado a cada reinício**. Por isso os dados ficam num
+banco Postgres gratuito e permanente no **Neon**, e o Render fica só com o programa.
 
-| Item | Plano no Render | Custo aproximado |
+| Item | Onde | Custo |
 |---|---|---|
-| Servidor (não dorme) | Starter | US$ 7 por mês |
-| Banco de dados Postgres permanente | Basic-256mb | US$ 6 por mês |
+| Programa (servidor) | Render, plano Free | R$ 0 (dorme após 15 min sem uso; o primeiro acesso leva cerca de 1 minuto) |
+| Banco de dados | Neon, plano Free (1 GB, sem cartão) | R$ 0 (os dados não são apagados por inatividade) |
 
-Total: cerca de **US$ 13 por mês** (confira o valor atual em render.com/pricing).
-Dividido entre as congregações, fica abaixo de R$ 1 por congregação por mês.
+As fotos de comprovante são reduzidas automaticamente para cerca de 200 KB, para caber no 1 GB.
+Com 18 congregações, isso dá alguns anos de comprovantes. Quando o espaço passar de 80%, será hora
+de avaliar um plano pago ou guardar comprovantes antigos fora do sistema.
 
 ## Passo a passo
 
-1. No GitHub, deixe o repositório **privado** (Settings → General → Danger Zone → Change visibility).
-2. No Render, clique em **New + → Blueprint** e escolha este repositório.
-   O arquivo `render.yaml` cria o servidor e o banco de dados juntos.
-3. Quando o Render pedir, preencha a variável **ADMIN_SENHA** com uma senha forte
-   (mínimo 8 caracteres). Ela cria o primeiro usuário da Tesouraria Nacional, com o usuário `nacional`.
-   A senha nunca fica escrita no código.
-4. Cadastre o cartão no Render para os planos pagos e confirme.
-5. Depois de publicado, entre com `nacional` e a senha escolhida e troque a senha em **Minha conta**.
+1. **Neon:** crie uma conta em neon.com (pode entrar com o GitHub), crie um projeto chamado
+   `tesouraria-inj`, região mais próxima disponível, e copie a **connection string**
+   (começa com `postgresql://`).
+2. **GitHub:** deixe o repositório privado (Settings → General → Danger Zone → Change visibility).
+3. **Render:** abra o serviço `tesouraria-inj` → **Environment** e preencha:
+   - `DATABASE_URL` = a connection string do Neon
+   - `ADMIN_SENHA` = uma senha forte (mínimo 8 caracteres) para o usuário `nacional`
+4. Aprove o pedido de aprovação no GitHub (Merge). O Render publica sozinho.
+5. Entre com `nacional` e a senha, e troque a senha em **Minha conta**.
+
+Sem `DATABASE_URL`, o sistema se recusa a iniciar no Render, justamente para não perder dados.
 
 ## Primeiros passos no sistema
 

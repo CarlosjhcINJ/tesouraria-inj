@@ -1,12 +1,13 @@
-# Publicação no Render com banco de dados permanente.
-# O plano gratuito apaga os dados a cada reinício e dorme depois de 15 minutos:
-# por isso o serviço usa o plano "starter" e o banco Postgres pago "basic-256mb".
+# Publicação gratuita:
+# - Servidor: plano gratuito do Render (dorme após 15 minutos sem uso; o primeiro acesso leva cerca de 1 minuto).
+# - Banco de dados: Postgres gratuito no Neon (neon.com), que guarda os dados de forma permanente.
+#   Copie a "connection string" do Neon para a variável DATABASE_URL no painel do Render.
+# Nunca use o disco do próprio Render para os dados: no plano gratuito ele é apagado a cada reinício.
 services:
   - type: web
     name: tesouraria-inj
     runtime: python
-    plan: starter
-    region: virginia
+    plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 60
     healthCheckPath: /login
@@ -14,18 +15,10 @@ services:
       - key: SECRET_KEY
         generateValue: true
       - key: DATABASE_URL
-        fromDatabase:
-          name: tesouraria-db
-          property: connectionString
+        sync: false   # cole aqui a connection string do Neon
       - key: ADMIN_USUARIO
         value: nacional
       - key: ADMIN_SENHA
         sync: false   # digite no painel do Render; nunca no código
       - key: PYTHON_VERSION
         value: 3.12.7
-
-databases:
-  - name: tesouraria-db
-    plan: basic-256mb
-    region: virginia
-    databaseName: tesouraria

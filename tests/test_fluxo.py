@@ -217,3 +217,15 @@ def test_seguranca(app):
         assert r.status_code == 302 and r.headers['Location'].endswith('/inicio')
     finally:
         app.config['TESTING_SEM_CSRF'] = True
+
+
+def test_foto_de_comprovante_e_reduzida(app):
+    from PIL import Image
+    big = io.BytesIO()
+    Image.new('RGB', (4000, 3000), (200, 30, 30)).save(big, 'PNG')
+    with app.test_request_context('/', method='POST', data={'anexo': (io.BytesIO(big.getvalue()), 'foto.png', 'image/png')},
+                                  content_type='multipart/form-data'):
+        a = appmod._ler_anexo('anexo')
+    assert a['tipo'] == 'image/jpeg' and a['nome'] == 'foto.jpg'
+    assert len(a['dados']) < 300 * 1024
+    assert Image.open(io.BytesIO(a['dados'])).size[0] <= 1600

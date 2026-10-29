@@ -1,0 +1,42 @@
+{% extends 'base.html' %}
+{% block title %}Histórico de alterações — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Histórico de alterações</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h1 class="page-title">Histórico de alterações</h1>
+    <p class="text-muted mb-0 small">Toda edição, exclusão, fechamento, reabertura e mudança de regra fica registrada com quem fez, quando e o valor anterior. Mostra os 500 mais recentes.</p>
+  </div>
+  <form class="d-flex gap-2 align-items-center">
+    <select name="cong" class="form-select form-select-sm" style="width:240px" onchange="this.form.submit()">
+      <option value="">Todas as congregações</option>
+      {% for c in congs %}<option value="{{ c['id'] }}" {% if cong_sel == c['id'] | string %}selected{% endif %}>{{ c['nome'] }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+<div class="table-card">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 align-top">
+      <thead><tr><th>Quando</th><th>Quem</th><th>Congregação</th><th>Ação</th><th>Detalhe</th><th>Antes / depois</th></tr></thead>
+      <tbody>
+        {% for a in itens %}
+        <tr>
+          <td class="small text-nowrap">{{ a['quando'] | string | truncate(16, True, '') }}</td>
+          <td class="small">{{ a['usuario_nome'] or '—' }}</td>
+          <td class="small">{{ a['cong_nome'] or 'Nacional' }}</td>
+          <td class="small"><code>{{ a['acao'] }}</code></td>
+          <td class="small">{{ a['detalhe'] }}</td>
+          <td class="small text-muted" style="max-width:340px">
+            {% if a['antes'] %}<details><summary>antes</summary><pre class="small mb-1" style="white-space:pre-wrap">{{ a['antes'] }}</pre></details>{% endif %}
+            {% if a['depois'] %}<details><summary>depois</summary><pre class="small mb-0" style="white-space:pre-wrap">{{ a['depois'] }}</pre></details>{% endif %}
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="6" class="text-center text-muted py-5">Nenhuma alteração registrada ainda.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

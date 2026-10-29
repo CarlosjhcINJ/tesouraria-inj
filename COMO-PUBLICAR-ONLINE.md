@@ -1,54 +1,51 @@
-# 🌐 Como Publicar o Tesouraria INJ Online (GRÁTIS)
+# Como publicar a Tesouraria INJ
 
-## Opção Recomendada: Render.com (grátis, permanente)
+## O que mudou e por quê
 
-### Passo 1 — Criar conta no GitHub
-1. Acesse https://github.com e crie uma conta gratuita
-2. Clique em "New repository"
-3. Nome: `tesouraria-inj`
-4. Deixe como "Public" e clique "Create repository"
+O plano gratuito do Render **apaga o banco de dados** a cada reinício do serviço e põe o
+sistema para dormir depois de 15 minutos sem acesso. Para uso oficial, o sistema agora usa:
 
-### Passo 2 — Enviar os arquivos para o GitHub
-Abra o Terminal e execute:
+| Item | Plano no Render | Custo aproximado |
+|---|---|---|
+| Servidor (não dorme) | Starter | US$ 7 por mês |
+| Banco de dados Postgres permanente | Basic-256mb | US$ 6 por mês |
+
+Total: cerca de **US$ 13 por mês** (confira o valor atual em render.com/pricing).
+Dividido entre as congregações, fica abaixo de R$ 1 por congregação por mês.
+
+## Passo a passo
+
+1. No GitHub, deixe o repositório **privado** (Settings → General → Danger Zone → Change visibility).
+2. No Render, clique em **New + → Blueprint** e escolha este repositório.
+   O arquivo `render.yaml` cria o servidor e o banco de dados juntos.
+3. Quando o Render pedir, preencha a variável **ADMIN_SENHA** com uma senha forte
+   (mínimo 8 caracteres). Ela cria o primeiro usuário da Tesouraria Nacional, com o usuário `nacional`.
+   A senha nunca fica escrita no código.
+4. Cadastre o cartão no Render para os planos pagos e confirme.
+5. Depois de publicado, entre com `nacional` e a senha escolhida e troque a senha em **Minha conta**.
+
+## Primeiros passos no sistema
+
+1. **Congregações e usuários:** cadastre cada congregação com o tesoureiro e o pastor.
+2. **Cartas anuais:** emita a carta do ano de cada congregação. Se os dízimos do ano anterior
+   não estiverem no sistema, use **Ajustar** e digite a categoria e o % de fundo local da carta atual.
+3. O pastor entra e confirma a carta.
+4. O tesoureiro lança dízimos e ofertas e, no começo do mês seguinte, usa **Fechar o mês**.
+
+## Rodar no computador (para testes)
+
 ```bash
-cd ~/Documents/TesourariaINJ
-git init
-git add .
-git commit -m "Tesouraria INJ - versão inicial"
-git branch -M main
-git remote add origin https://github.com/SEU_USUARIO/tesouraria-inj.git
-git push -u origin main
+pip install -r requirements.txt
+ADMIN_SENHA="uma-senha-de-teste" python3 app.py
 ```
 
-### Passo 3 — Publicar no Render
-1. Acesse https://render.com e crie conta (grátis)
-2. Clique em "New +" → "Web Service"
-3. Conecte sua conta GitHub
-4. Escolha o repositório `tesouraria-inj`
-5. Configure:
-   - **Name**: tesouraria-inj
-   - **Build Command**: `pip install -r requirements.txt`
-   - **Start Command**: `gunicorn app:app --bind 0.0.0.0:$PORT`
-6. Clique "Create Web Service"
-7. Aguarde 2-3 minutos
-8. ✅ Seu link será algo como: `https://tesouraria-inj.onrender.com`
+Sem `DATABASE_URL`, o sistema usa um arquivo SQLite em `data/tesouraria.db`.
 
----
+## Testes automáticos
 
-## Usuário Admin Padrão
-- **Usuário**: admin
-- **Senha**: admin123
-- ⚠️ MUDE A SENHA após o primeiro acesso!
+```bash
+pip install pytest
+python -m pytest -q
+```
 
-## Como adicionar uma Congregação
-1. Entre com o usuário admin
-2. Clique em "Administrador" no menu
-3. Clique "Nova Congregação"
-4. Defina nome, usuário e senha
-5. Envie o link + usuário + senha para o tesoureiro
-
-## Link para compartilhar
-Após publicar, o link será algo como:
-`https://tesouraria-inj.onrender.com`
-
-Cada congregação entra com seu próprio usuário e vê apenas seus dados.
+Os testes repetem o fechamento real de Vila Ramos de setembro de 2026 (total R$ 3.014,11).

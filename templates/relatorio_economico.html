@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Relatório Econômico — {{ cong['nome'] }} — {{ MESES[f['mes'] - 1] | capitalize }} {{ f['ano'] }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root { --navy:#25307a; --azul:#1d6fb8; --claro:#e9eefb; --cinza:#5d6d7e; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', Arial, sans-serif; color: #1b2340; margin: 0; background: #eef1f6; }
+  .folha { background: #fff; max-width: 900px; margin: 24px auto; padding: 28px 32px; border: 3px solid var(--navy); border-radius: 22px; }
+  .topo { display: flex; align-items: center; gap: 18px; border-bottom: 2px solid var(--navy); padding-bottom: 14px; }
+  .topo img { width: 130px; }
+  .topo h1 { margin: 0; color: var(--navy); font-size: 30px; font-weight: 800; letter-spacing: .5px; }
+  .topo .cnpj { color: var(--azul); font-weight: 700; }
+  .topo .regiao { margin-left: auto; text-align: right; color: var(--navy); font-weight: 700; font-size: 14px; }
+  .dados { display: grid; grid-template-columns: 190px 1fr; gap: 6px 12px; margin: 16px 0; font-size: 14px; }
+  .dados .r { background: var(--azul); color: #fff; font-weight: 700; font-size: 12px; padding: 4px 10px; border-radius: 999px; text-transform: uppercase; }
+  .dados .v { border-bottom: 1px solid #b9c2d8; padding: 3px 4px; font-weight: 600; }
+  .corpo { display: grid; grid-template-columns: 1.35fr 1fr; gap: 18px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: var(--navy); color: #fff; text-align: left; padding: 6px 10px; font-size: 12px; letter-spacing: .05em; }
+  td { padding: 5px 10px; border-bottom: 1px solid #d4dbea; }
+  td.val { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; font-weight: 600; }
+  td.zero { color: #aab3c5; font-weight: 400; }
+  .base { display: block; font-size: 10.5px; color: var(--cinza); }
+  .bloco { writing-mode: vertical-rl; transform: rotate(180deg); background: var(--navy); color: #fff; font-weight: 700; font-size: 11px; letter-spacing: .12em; text-align: center; width: 26px; }
+  .bloco.dist { background: var(--azul); }
+  .sub td { font-weight: 700; background: var(--claro); }
+  .total td { background: var(--navy); color: #fff; font-size: 15px; font-weight: 800; }
+  .lado { display: flex; flex-direction: column; gap: 14px; }
+  .caixa { border: 2px solid var(--navy); border-radius: 16px; padding: 14px; font-size: 13px; }
+  .caixa h3 { margin: 0 0 8px; color: #fff; background: var(--navy); border-radius: 10px; font-size: 13px; text-align: center; padding: 5px; }
+  .caixa .grande { font-size: 15px; font-weight: 800; color: var(--navy); }
+  .ass { border-top: 1px solid #1b2340; margin-top: 34px; padding-top: 4px; text-align: center; font-size: 12px; }
+  .ass b { display: block; font-size: 13px; }
+  .rodape { margin-top: 16px; font-size: 11.5px; color: var(--cinza); display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; }
+  .acoes { max-width: 900px; margin: 16px auto 0; display: flex; gap: 8px; justify-content: flex-end; }
+  .acoes button { font: inherit; font-weight: 600; background: var(--navy); color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; cursor: pointer; }
+  @media (max-width: 720px) { .corpo { grid-template-columns: 1fr; } .dados { grid-template-columns: 1fr; } .topo { flex-wrap: wrap; } }
+  @media print { body { background: #fff; } .folha { margin: 0; border-width: 2px; } .acoes { display: none; } }
+</style>
+</head>
+<body>
+<div class="acoes"><button onclick="window.print()">Imprimir ou salvar em PDF</button></div>
+<div class="folha">
+  <div class="topo">
+    <img src="{{ url_for('static', filename='img/logo-inj.png') }}" alt="Igreja do Nome de Jesus"/>
+    <div>
+      <h1>IGREJA DO NOME DE JESUS</h1>
+      <div class="cnpj">CNPJ: {{ nacional.cnpj }}</div>
+    </div>
+    <div class="regiao">RELATÓRIO<br/>ECONÔMICO</div>
+  </div>
+
+  <div class="dados">
+    <span class="r">Congregação</span><span class="v">{{ cong['nome'] }}</span>
+    <span class="r">Nome do pastor</span><span class="v">{{ cfg.get('nome_pastor') or '—' }}</span>
+    <span class="r">Nome do tesoureiro</span><span class="v">{{ cfg.get('nome_tesoureiro') or '—' }}</span>
+    <span class="r">Endereço da igreja</span><span class="v">{{ cfg.get('endereco') or '—' }}</span>
+    <span class="r">Envio referente a</span><span class="v">{{ MESES[f['mes'] - 1] | capitalize }} de {{ f['ano'] }} · {{ CATEGORIAS_CONG[calc.compromisso.categoria] }}</span>
+  </div>
+
+  <div class="corpo">
+    <div>
+      <table>
+        <tr><th colspan="2" style="padding-left:36px">ITEM</th><th style="text-align:right">VALORES</th></tr>
+        {% for l in calc.nacional %}
+        <tr>
+          {% if loop.first %}<td class="bloco" rowspan="{{ calc.nacional | length + 1 }}">NACIONAL</td>{% endif %}
+          <td>{{ l.rotulo }}{% if l.base %}<span class="base">base {{ l.base | brl }}</span>{% endif %}</td>
+          <td class="val {% if not l.valor %}zero{% endif %}">{{ l.valor | brl }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="sub"><td>Subtotal nacional</td><td class="val">{{ calc.total_nacional | brl }}</td></tr>
+        {% for l in calc.distrital %}
+        <tr>
+          {% if loop.first %}<td class="bloco dist" rowspan="{{ calc.distrital | length + 1 }}">DISTRITAL</td>{% endif %}
+          <td>{{ l.rotulo }}</td>
+          <td class="val {% if not l.valor %}zero{% endif %}">{{ l.valor | brl }}</td>
+        </tr>
+        {% endfor %}
+        <tr class="sub"><td>Subtotal distrital</td><td class="val">{{ calc.total_distrital | brl }}</td></tr>
+        <tr class="total"><td colspan="2" style="padding-left:36px">TOTAL</td><td class="val">{{ calc.total | brl }}</td></tr>
+      </table>
+    </div>
+    <div class="lado">
+      <div class="caixa">
+        <h3>CONTA BANCÁRIA PARA DEPÓSITOS</h3>
+        <div class="grande">{{ nacional.banco }}</div>
+        <div>Agência {{ nacional.agencia }} · Operação {{ nacional.operacao }}</div>
+        <div>Conta {{ nacional.conta }}</div>
+        <div style="margin-top:6px"><b>Chave Pix:</b> {{ nacional.pix }}</div>
+        <div>{{ nacional.favorecido }}</div>
+      </div>
+      <div class="caixa">
+        <h3>DIVISÃO DO DÍZIMO</h3>
+        {% set liq = calc.liquidacao %}
+        <div>Dízimo bruto: <b>{{ liq.bruto | brl }}</b></div>
+        <div>Fundo local ({{ calc.compromisso.fundo_local_pct }}%): {{ liq.fundo_local | brl }}</div>
+        <div>Sustento pastoral: {{ liq.liquido | brl }}</div>
+      </div>
+      <div class="caixa">
+        <h3>ASSINATURAS</h3>
+        <div class="ass"><b>{{ cfg.get('nome_pastor') or '' }}</b>Pastor{% if f['aprovado_em'] %} · aprovado no sistema em {{ f['aprovado_em'] | data }}{% endif %}</div>
+        <div class="ass"><b>{{ cfg.get('nome_tesoureiro') or '' }}</b>Tesoureiro · fechado em {{ f['fechado_em'] | data }}</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="rodape">
+    <span>{% if f['comprovante_valor'] %}Comprovante: {{ f['comprovante_valor'] | brl }} depositado em {{ f['comprovante_data'] | data }}{% else %}Comprovante ainda não anexado{% endif %}</span>
+    <span>Gerado pelo sistema Tesouraria INJ · {{ now().strftime('%d/%m/%Y %H:%M') }}</span>
+  </div>
+</div>
+</body>
+</html>

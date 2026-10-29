@@ -15,7 +15,13 @@
   <div class="col-lg-4">
     <div class="form-card h-100">
       <div class="form-section-title"><i class="bi bi-plus-circle me-2"></i>Novo Lançamento</div>
-      <form method="POST" id="formLancamento">
+      {% if not pode_editar %}
+      <div class="alert alert-info small mb-0">Somente o tesoureiro lança valores. Você pode consultar os lançamentos ao lado.</div>
+      {% else %}
+      {% if mes_sel in travados %}
+      <div class="alert alert-warning small">{{ mes_sel | capitalize }}/{{ ano_sel }} está fechado. Para lançar nele, o pastor precisa reabrir o mês.</div>
+      {% endif %}
+      <form method="POST" id="formLancamento" enctype="multipart/form-data">
 
         <div class="mb-3">
           <label class="form-label">Livro Contábil</label>
@@ -79,6 +85,20 @@
                  value="{{ now().strftime('%d/%m/%Y') }}"/>
         </div>
 
+        <div class="mb-3">
+          <label class="form-label">Forma</label>
+          <select name="forma" class="form-select">
+            <option value="">— Selecione —</option>
+            {% for fm in formas %}<option value="{{ fm }}">{{ fm }}</option>{% endfor %}
+          </select>
+        </div>
+
+        <div class="mb-3">
+          <label class="form-label">Comprovante <span class="text-muted fw-normal">(obrigatório em saídas, § 95)</span></label>
+          <input type="file" name="anexo" class="form-control" accept="application/pdf,image/jpeg,image/png,image/webp"/>
+          <div class="form-text">PDF, JPG ou PNG até 5 MB.</div>
+        </div>
+
         <div class="mb-4">
           <label class="form-label">Observação</label>
           <input type="text" name="obs" class="form-control" placeholder="Opcional..."/>
@@ -88,6 +108,7 @@
           <i class="bi bi-save me-2"></i>Registrar Lançamento
         </button>
       </form>
+      {% endif %}
     </div>
   </div>
 
@@ -176,7 +197,12 @@
                   {{ t['tipo'] }}
                 </span>
               </td>
-              <td class="small">{{ t['item'] }}</td>
+              <td class="small">{{ t['item'] }}
+                {% if t['origem'] %}<span class="badge bg-light text-secondary border ms-1" title="Gerado pelo fechamento do mês">fechamento</span>{% endif %}
+                {% if t['transferencia'] %}<span class="badge bg-light text-secondary border ms-1" title="Transferência entre livros: não conta como receita nem despesa">transferência</span>{% endif %}
+                {% if t['n_anexos'] %}<a href="{{ url_for('anexo_lancamento', tid=t['id']) }}" target="_blank" class="ms-1" title="Ver comprovante"><i class="bi bi-paperclip"></i></a>
+                {% elif t['tipo'] == 'Saída' and not t['origem'] %}<span class="badge bg-warning-subtle text-warning-emphasis ms-1" title="Despesa sem comprovante (§ 95)">sem comprovante</span>{% endif %}
+              </td>
               <td class="text-end fw-semibold {% if t['tipo']=='Entrada' %}text-entrada{% else %}text-saida{% endif %}">
                 {{ t['valor'] | brl }}
               </td>
@@ -186,7 +212,15 @@
                 {{ t['obs'] or '' }}
               </td>
               <td>
+                {% if pode_editar and not t['origem'] and t['mes'] not in travados %}
                 <div class="d-flex gap-1">
+                  {% if not t['n_anexos'] %}
+                  <form method="POST" action="{{ url_for('anexo_lancamento', tid=t['id']) }}" enctype="multipart/form-data" class="d-inline">
+                    <label class="btn btn-xs btn-outline-primary mb-0" style="padding:2px 8px; font-size:0.75rem" title="Anexar comprovante">
+                      <i class="bi bi-paperclip"></i><input type="file" name="anexo" hidden accept="application/pdf,image/jpeg,image/png,image/webp" onchange="this.form.submit()"/>
+                    </label>
+                  </form>
+                  {% endif %}
                   <a href="{{ url_for('editar_lancamento', tid=t['id']) }}"
                      class="btn btn-xs btn-outline-secondary" style="padding:2px 8px; font-size:0.75rem">
                     <i class="bi bi-pencil"></i>
@@ -198,6 +232,7 @@
                     </button>
                   </form>
                 </div>
+                {% elif t['mes'] in travados %}<i class="bi bi-lock text-muted" title="Mês fechado"></i>{% endif %}
               </td>
             </tr>
             {% else %}

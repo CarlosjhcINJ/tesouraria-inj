@@ -1,13 +1,31 @@
+# Publicação no Render com banco de dados permanente.
+# O plano gratuito apaga os dados a cada reinício e dorme depois de 15 minutos:
+# por isso o serviço usa o plano "starter" e o banco Postgres pago "basic-256mb".
 services:
   - type: web
     name: tesouraria-inj
-    env: python
+    runtime: python
+    plan: starter
+    region: virginia
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT
+    startCommand: gunicorn app:app --bind 0.0.0.0:$PORT --workers 2 --timeout 60
+    healthCheckPath: /login
     envVars:
       - key: SECRET_KEY
         generateValue: true
-    disk:
-      name: data
-      mountPath: /opt/render/project/src/data
-      sizeGB: 1
+      - key: DATABASE_URL
+        fromDatabase:
+          name: tesouraria-db
+          property: connectionString
+      - key: ADMIN_USUARIO
+        value: nacional
+      - key: ADMIN_SENHA
+        sync: false   # digite no painel do Render; nunca no código
+      - key: PYTHON_VERSION
+        value: 3.12.7
+
+databases:
+  - name: tesouraria-db
+    plan: basic-256mb
+    region: virginia
+    databaseName: tesouraria

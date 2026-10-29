@@ -3,244 +3,159 @@
 {% block breadcrumb %}<li class="breadcrumb-item active">Dízimos</li>{% endblock %}
 
 {% block content %}
-<div class="d-flex align-items-center justify-content-between mb-4">
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
   <div>
-    <h1 class="page-title">Gestão de Dízimos</h1>
-    <p class="text-muted mb-0 small">Cálculo e liquidação de dízimos</p>
+    <h1 class="page-title">Dízimos</h1>
+    <p class="text-muted mb-0 small">Registre a entrada de dízimos. A divisão segue a carta anual de {{ ano_sel }}.</p>
   </div>
   <form class="d-flex gap-2 align-items-center">
     <label class="form-label mb-0 small fw-semibold">Ano:</label>
     <select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
-      {% for a in anos %}
-        <option value="{{ a }}" {% if a == ano_sel %}selected{% endif %}>{{ a }}</option>
-      {% endfor %}
+      {% for a in anos %}<option value="{{ a }}" {% if a == ano_sel %}selected{% endif %}>{{ a }}</option>{% endfor %}
     </select>
   </form>
 </div>
 
 <div class="row g-4">
-  <!-- ── Formulário de cálculo ── -->
   <div class="col-lg-5">
     <div class="form-card mb-4">
-      <div class="form-section-title"><i class="bi bi-calculator me-2"></i>Calcular Liquidação</div>
-      <form method="POST" id="formDizimo">
+      <div class="form-section-title"><i class="bi bi-envelope-paper me-2"></i>Compromissos de {{ ano_sel }}</div>
+      {% if comp %}
+        <div class="d-flex flex-wrap gap-2 mb-2">
+          <span class="badge bg-primary-subtle text-primary-emphasis">{{ CATEGORIAS_CONG[comp.categoria] }}</span>
+          <span class="badge bg-light text-dark border">Dízimo dos Dízimos 10%</span>
+          {% if comp.nivelacao %}<span class="badge bg-light text-dark border">Nivelação 5%</span>{% endif %}
+          {% if comp.betel %}<span class="badge bg-light text-dark border">Betel 4% do líquido</span>{% endif %}
+          <span class="badge bg-light text-dark border">Fundo local {{ comp.fundo_local_pct }}%</span>
+        </div>
+        {% if not comp.confirmado %}<div class="small text-warning-emphasis">O pastor ainda não confirmou a carta de {{ ano_sel }}.</div>{% endif %}
+      {% else %}
+        <div class="alert alert-warning small mb-0">A Tesouraria Nacional ainda não emitiu a carta anual de {{ ano_sel }}. Você pode registrar os dízimos; a divisão será calculada no fechamento do mês.</div>
+      {% endif %}
+    </div>
 
+    {% if pode_editar %}
+    <div class="form-card mb-4">
+      <div class="form-section-title"><i class="bi bi-plus-circle me-2"></i>Registrar dízimo</div>
+      <form method="POST" id="formDizimo">
         <div class="mb-3">
-          <label class="form-label">Dízimo Bruto (R$)</label>
+          <label class="form-label">Dízimo bruto (R$)</label>
           <div class="input-group">
             <span class="input-group-text">R$</span>
-            <input type="text" name="dizimo_bruto" id="dizimoBruto" class="form-control"
-                   placeholder="0,00" required oninput="formatBRL(this)"/>
+            <input type="text" name="dizimo_bruto" id="dizimoBruto" class="form-control" placeholder="0,00" required inputmode="decimal"/>
           </div>
+          <div class="form-text">Pode registrar culto por culto; o fechamento soma o mês inteiro.</div>
         </div>
-
-        <div class="row g-2 mb-3">
-          <div class="col-6">
-            <label class="form-label">% Nacional</label>
-            <div class="input-group">
-              <input type="number" name="pct_nacional" id="pctNacional" class="form-control"
-                     step="0.01" min="0" max="1" value="{{ pct_nac }}"/>
-              <span class="input-group-text text-muted small" id="labelNac">{{ "%.0f" | format(pct_nac * 100) }}%</span>
-            </div>
-          </div>
-          <div class="col-6">
-            <label class="form-label">% Fundo Local</label>
-            <div class="input-group">
-              <input type="number" name="pct_fundo_local" id="pctFundoLocal" class="form-control"
-                     step="0.01" min="0" max="1" value="{{ pct_fl }}"/>
-              <span class="input-group-text text-muted small" id="labelFL">{{ "%.0f" | format(pct_fl * 100) }}%</span>
-            </div>
-          </div>
-        </div>
-
         <div class="row g-2 mb-3">
           <div class="col-7">
-            <label class="form-label">Mês de Referência</label>
+            <label class="form-label">Mês</label>
             <select name="mes" class="form-select" required>
               <option value="">— Selecione —</option>
-              {% for m in meses %}
-                <option value="{{ m }}">{{ m | capitalize }}</option>
-              {% endfor %}
+              {% for m in meses %}<option value="{{ m }}">{{ m | capitalize }}</option>{% endfor %}
             </select>
           </div>
           <div class="col-5">
             <label class="form-label">Ano</label>
             <select name="ano" class="form-select" required>
-              {% for a in anos %}
-                <option value="{{ a }}" {% if a == ano_sel %}selected{% endif %}>{{ a }}</option>
-              {% endfor %}
+              {% for a in anos %}<option value="{{ a }}" {% if a == ano_sel %}selected{% endif %}>{{ a }}</option>{% endfor %}
             </select>
           </div>
         </div>
-
         <div class="mb-3">
           <label class="form-label">Data</label>
-          <input type="text" name="data_registro" class="form-control"
-                 value="{{ now().strftime('%d/%m/%Y') }}" placeholder="dd/mm/aaaa"/>
+          <input type="text" name="data_registro" class="form-control" value="{{ now().strftime('%d/%m/%Y') }}" placeholder="dd/mm/aaaa"/>
         </div>
-
         <div class="mb-3">
           <label class="form-label">Observação</label>
-          <input type="text" name="obs" class="form-control" placeholder="Opcional..."/>
+          <input type="text" name="obs" class="form-control" placeholder="Opcional"/>
         </div>
 
-        <!-- Preview cálculo em tempo real -->
         <div class="dizimo-result mb-4">
-          <div class="mb-3">
-            <div class="dr-label">Dízimo Bruto</div>
-            <div class="dr-value" id="calcBruto">R$ 0,00</div>
-          </div>
-          <div class="row">
-            <div class="col-6">
-              <div class="dr-label">Envío Nacional (<span id="pctNacLabel">{{ "%.0f" | format(pct_nac * 100) }}</span>%)</div>
-              <div class="dr-value text-warning" id="calcNacional">R$ 0,00</div>
-            </div>
-            <div class="col-6">
-              <div class="dr-label">Fundo Local (<span id="pctFLLabel">{{ "%.0f" | format(pct_fl * 100) }}</span>%)</div>
-              <div class="dr-value" style="color:#82e0aa" id="calcFundoLocal">R$ 0,00</div>
-            </div>
-          </div>
+          <div class="dr-label">Prévia da divisão</div>
+          <div class="d-flex justify-content-between mt-2"><span>Dízimo dos Dízimos 10%</span><span id="pvDD">R$ 0,00</span></div>
+          <div class="d-flex justify-content-between"><span>Nivelação 5%</span><span id="pvNiv">R$ 0,00</span></div>
+          <div class="d-flex justify-content-between"><span>Betel 4%</span><span id="pvBetel">R$ 0,00</span></div>
+          <div class="d-flex justify-content-between"><span>Fundo local</span><span id="pvFL">R$ 0,00</span></div>
           <hr style="border-color:rgba(255,255,255,0.2)"/>
-          <div>
-            <div class="dr-label">Líquido ao Pastor</div>
-            <div class="dr-value" style="font-size:1.8rem" id="calcLiquido">R$ 0,00</div>
-          </div>
+          <div class="d-flex justify-content-between fw-bold"><span>Sustento pastoral</span><span id="pvLiq">R$ 0,00</span></div>
         </div>
-
-        <button type="submit" class="btn btn-primary-custom w-100">
-          <i class="bi bi-save me-2"></i>Salvar Liquidação
-        </button>
+        <button type="submit" class="btn btn-primary-custom w-100"><i class="bi bi-save me-2"></i>Registrar dízimo</button>
       </form>
-    </div>
-
-    {% if calculo %}
-    <div class="table-card p-4" style="border-left:4px solid #27ae60">
-      <h6 class="fw-bold mb-3"><i class="bi bi-check-circle-fill text-success me-2"></i>Comprovante</h6>
-      <table class="table table-sm mb-0">
-        <tr><td class="text-muted">Bruto</td><td class="fw-bold text-end">{{ calculo.bruto | brl }}</td></tr>
-        <tr><td class="text-muted">Envío Nacional ({{ "%.0f" | format(calculo.pct_nac * 100) }}%)</td>
-            <td class="text-end text-danger">- {{ calculo.v_nac | brl }}</td></tr>
-        <tr><td class="text-muted">Fundo Local ({{ "%.0f" | format(calculo.pct_fl * 100) }}%)</td>
-            <td class="text-end text-danger">- {{ calculo.v_fl | brl }}</td></tr>
-        <tr class="table-success">
-          <td class="fw-bold">Líquido ao Pastor</td>
-          <td class="fw-bold text-end">{{ calculo.v_liquido | brl }}</td>
-        </tr>
-      </table>
-      <div class="mt-3 pt-3 border-top">
-        <div class="small text-muted">Referência: <strong>{{ calculo.mes | capitalize }} / {{ calculo.ano }}</strong></div>
-        <div class="mt-3 border-top pt-2 d-flex justify-content-between small text-muted">
-          <div>Pastor: ___________________</div>
-          <div>Tesoureiro: ___________________</div>
-        </div>
-      </div>
     </div>
     {% endif %}
   </div>
 
-  <!-- ── Histórico ── -->
   <div class="col-lg-7">
-    <!-- Totais do ano -->
     {% if historico %}
-    {% set total_bruto   = historico | sum(attribute='dizimo_bruto') %}
-    {% set total_nac     = historico | sum(attribute='valor_nacional') %}
-    {% set total_fl      = historico | sum(attribute='valor_fundo_local') %}
-    {% set total_liq     = historico | sum(attribute='valor_liquido') %}
+    {% set total_bruto = historico | sum(attribute='dizimo_bruto') %}
+    {% set total_nac = historico | sum(attribute='valor_nacional') %}
+    {% set total_fl = historico | sum(attribute='valor_fundo_local') %}
+    {% set total_liq = historico | sum(attribute='valor_liquido') %}
     <div class="row g-3 mb-3">
-      <div class="col-6 col-md-3">
-        <div class="stat-card dizimo position-relative">
-          <div class="stat-label">Dízimo Total</div>
-          <div class="stat-value" style="font-size:1.1rem">{{ total_bruto | brl }}</div>
-        </div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="stat-card saida position-relative">
-          <div class="stat-label">Envíos Nac.</div>
-          <div class="stat-value" style="font-size:1.1rem">{{ total_nac | brl }}</div>
-        </div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="stat-card saldo position-relative">
-          <div class="stat-label">Fundo Local</div>
-          <div class="stat-value" style="font-size:1.1rem">{{ total_fl | brl }}</div>
-        </div>
-      </div>
-      <div class="col-6 col-md-3">
-        <div class="stat-card entrada position-relative">
-          <div class="stat-label">Líq. Pastor</div>
-          <div class="stat-value" style="font-size:1.1rem">{{ total_liq | brl }}</div>
-        </div>
-      </div>
+      <div class="col-6 col-md-3"><div class="stat-card dizimo position-relative"><div class="stat-label">Dízimo total</div><div class="stat-value" style="font-size:1.1rem">{{ total_bruto | brl }}</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card saida position-relative"><div class="stat-label">Envio nacional</div><div class="stat-value" style="font-size:1.1rem">{{ total_nac | brl }}</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card saldo position-relative"><div class="stat-label">Fundo local</div><div class="stat-value" style="font-size:1.1rem">{{ total_fl | brl }}</div></div></div>
+      <div class="col-6 col-md-3"><div class="stat-card entrada position-relative"><div class="stat-label">Sustento pastoral</div><div class="stat-value" style="font-size:1.1rem">{{ total_liq | brl }}</div></div></div>
     </div>
     {% endif %}
 
     <div class="table-card">
-      <div class="table-header">
-        <h6><i class="bi bi-clock-history me-2 text-primary"></i>Histórico — {{ ano_sel }}</h6>
-      </div>
+      <div class="table-header"><h6><i class="bi bi-clock-history me-2 text-primary"></i>Registros de {{ ano_sel }}</h6></div>
       <div class="table-responsive">
         <table class="table table-hover mb-0">
-          <thead>
-            <tr>
-              <th>Mês</th>
-              <th class="text-end">Bruto</th>
-              <th class="text-end">Nacional</th>
-              <th class="text-end">F. Local</th>
-              <th class="text-end">Líquido Pastor</th>
-              <th>Obs</th>
-              <th></th>
-            </tr>
-          </thead>
+          <thead><tr><th>Mês</th><th>Data</th><th class="text-end">Bruto</th><th class="text-end">Envio nacional</th><th class="text-end">F. local</th><th class="text-end">Sustento</th><th>Obs</th><th></th></tr></thead>
           <tbody>
             {% for d in historico %}
             <tr>
               <td class="fw-semibold">{{ d['mes'] | capitalize }}</td>
+              <td class="small text-muted">{{ d['data_registro'] or '—' }}</td>
               <td class="text-end">{{ d['dizimo_bruto'] | brl }}</td>
               <td class="text-end text-danger">{{ d['valor_nacional'] | brl }}</td>
               <td class="text-end" style="color:#2980b9">{{ d['valor_fundo_local'] | brl }}</td>
               <td class="text-end fw-bold text-entrada">{{ d['valor_liquido'] | brl }}</td>
               <td class="small text-muted">{{ d['obs'] or '—' }}</td>
               <td>
+                {% if pode_editar %}
                 <form method="POST" action="{{ url_for('deletar_dizimo', did=d['id']) }}"
-                      onsubmit="return confirmarExclusao(this, 'Excluir registro de dízimo de {{ d["mes"] | capitalize }}?')">
-                  <button class="btn btn-xs btn-outline-danger" style="padding:2px 8px; font-size:0.72rem">
-                    <i class="bi bi-trash"></i>
-                  </button>
+                      onsubmit="return confirmarExclusao(this, 'Excluir este registro de dízimo de {{ d['mes'] | capitalize }}?')">
+                  <button class="btn btn-xs btn-outline-danger" style="padding:2px 8px; font-size:0.72rem" title="Excluir"><i class="bi bi-trash"></i></button>
                 </form>
+                {% endif %}
               </td>
             </tr>
             {% else %}
-            <tr>
-              <td colspan="7" class="text-center text-muted py-5">
-                <i class="bi bi-inbox fs-3 d-block mb-2 opacity-25"></i>
-                Nenhum registro de dízimo em {{ ano_sel }}.
-              </td>
-            </tr>
+            <tr><td colspan="8" class="text-center text-muted py-5"><i class="bi bi-inbox fs-3 d-block mb-2 opacity-25"></i>Nenhum dízimo registrado em {{ ano_sel }}.</td></tr>
             {% endfor %}
           </tbody>
         </table>
       </div>
     </div>
+    <p class="small text-muted mt-2">Os valores por registro são uma prévia. O valor oficial do envio é o do fechamento do mês.</p>
   </div>
 </div>
 {% endblock %}
 
 {% block scripts %}
+{% if pode_editar %}
 <script>
-  // Atualizar labels das porcentagens
-  document.getElementById('pctNacional').addEventListener('input', function() {
-    document.getElementById('labelNac').textContent = (this.value * 100).toFixed(0) + '%';
-    document.getElementById('pctNacLabel').textContent = (this.value * 100).toFixed(0);
-  });
-  document.getElementById('pctFundoLocal').addEventListener('input', function() {
-    document.getElementById('labelFL').textContent = (this.value * 100).toFixed(0) + '%';
-    document.getElementById('pctFLLabel').textContent = (this.value * 100).toFixed(0);
-  });
-
-  // Atualizar bruto no preview
-  document.getElementById('dizimoBruto').addEventListener('input', function() {
-    const v = parseFloat(this.value.replace(',', '.')) || 0;
-    document.getElementById('calcBruto').textContent = 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits:2});
-  });
+  (function () {
+    const comp = {{ (comp or {'categoria':'nova','nivelacao':false,'fundo_local_pct':0,'betel':false}) | tojson }};
+    const dd = {{ reg.get('pct_dizimo_dizimos', 0.10) }}, niv = {{ reg.get('pct_nivelacao', 0.05) }}, betel = {{ reg.get('pct_betel', 0.04) }};
+    const r2 = v => Math.round(v * 100) / 100;
+    const brl = v => v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+    const el = id => document.getElementById(id);
+    el('dizimoBruto').addEventListener('input', function () {
+      let t = this.value.replace(/[^\d.,]/g, '');
+      if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
+      const b = parseFloat(t) || 0;
+      const vdd = r2(b * dd), vniv = comp.nivelacao ? r2(b * niv) : 0;
+      const vbet = comp.betel ? r2((b - vdd - vniv) * betel) : 0;
+      const vfl = r2(b * comp.fundo_local_pct / 100);
+      el('pvDD').textContent = brl(vdd); el('pvNiv').textContent = brl(vniv);
+      el('pvBetel').textContent = brl(vbet); el('pvFL').textContent = brl(vfl);
+      el('pvLiq').textContent = brl(r2(b - vdd - vniv - vbet - vfl));
+    });
+  })();
 </script>
+{% endif %}
 {% endblock %}

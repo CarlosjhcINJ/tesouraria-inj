@@ -248,8 +248,8 @@
   <div class="tut-section-header">
     <div class="tut-num">4</div>
     <div>
-      <div class="tut-title"><i class="bi bi-cash-coin me-2"></i>Como Calcular os Dízimos</div>
-      <div class="tut-sub">Calcule automaticamente a liquidação mensal dos dízimos</div>
+      <div class="tut-title"><i class="bi bi-cash-coin me-2"></i>Dízimos e fechamento do mês</div>
+      <div class="tut-sub">Registre os dízimos; o sistema divide conforme a carta anual e fecha o mês</div>
     </div>
   </div>
 
@@ -259,34 +259,29 @@
       <div class="tut-step">
         <div class="tut-step-num">1</div>
         <div>
-          <div class="fw-semibold mb-1">Digite o Dízimo Bruto</div>
-          <div class="small text-muted">É o total de dízimos recebidos no mês antes de qualquer desconto.</div>
+          <div class="fw-semibold mb-1">Registre o dízimo bruto</div>
+          <div class="small text-muted">Em Dízimos, registre o valor recebido (pode ser culto por culto). O fechamento soma o mês inteiro.</div>
         </div>
       </div>
       <div class="tut-step mt-2">
         <div class="tut-step-num">2</div>
         <div>
-          <div class="fw-semibold mb-1">Verifique as porcentagens</div>
-          <div class="small text-muted">As porcentagens padrão são:</div>
-          <div class="mt-1 p-2 rounded" style="background:#f8fafc; border:1px solid #eef0f4; font-size:.82rem">
-            <div>📤 <strong>Envío Nacional:</strong> 15%</div>
-            <div>🏦 <strong>Fundo Local:</strong> 3%</div>
-          </div>
-          <div class="small text-muted mt-1">Pode alterar em Configurações.</div>
+          <div class="fw-semibold mb-1">Os percentuais vêm da carta anual</div>
+          <div class="small text-muted">A Tesouraria Nacional emite a carta do ano e o pastor confirma. Dela saem: Dízimo dos Dízimos 10%, nivelação 5% (se houver), Betel 4% (plenamente formada) e o % do fundo local. Ninguém digita percentual.</div>
         </div>
       </div>
       <div class="tut-step mt-2">
         <div class="tut-step-num">3</div>
         <div>
-          <div class="fw-semibold mb-1">Selecione Mês e Ano</div>
-          <div class="small text-muted">Escolha o mês de referência do dízimo.</div>
+          <div class="fw-semibold mb-1">Lance as ofertas de envio</div>
+          <div class="small text-muted">Em Lançamentos, livro “Envios / Missões”, tipo Entrada: Dia Missionário, Raios de Luz, Safras, ofertas distritais e as demais.</div>
         </div>
       </div>
       <div class="tut-step mt-2">
         <div class="tut-step-num">4</div>
         <div>
-          <div class="fw-semibold mb-1">Clique "Salvar Liquidação"</div>
-          <div class="small text-muted">O sistema calcula tudo e guarda no histórico.</div>
+          <div class="fw-semibold mb-1">Feche o mês</div>
+          <div class="small text-muted">Em “Fechar o mês”: o tesoureiro fecha, o pastor aprova, o tesoureiro deposita até o dia 5 e anexa o comprovante. Se o valor conferir, o mês trava.</div>
         </div>
       </div>
     </div>
@@ -299,23 +294,23 @@
         </div>
         <div class="row">
           <div class="col-6">
-            <div class="dr-label">Envío Nacional (15%)</div>
-            <div class="dr-value text-warning">R$ 300,00</div>
+            <div class="dr-label">Dízimo dos Dízimos (10%) + Betel (4% de R$ 1.800)</div>
+            <div class="dr-value text-warning">R$ 272,00</div>
           </div>
           <div class="col-6">
-            <div class="dr-label">Fundo Local (3%)</div>
-            <div class="dr-value" style="color:#82e0aa">R$ 60,00</div>
+            <div class="dr-label">Fundo local (1%)</div>
+            <div class="dr-value" style="color:#82e0aa">R$ 20,00</div>
           </div>
         </div>
         <hr style="border-color:rgba(255,255,255,.2)"/>
         <div>
-          <div class="dr-label">Líquido ao Pastor</div>
-          <div class="dr-value" style="font-size:1.6rem">R$ 1.640,00</div>
+          <div class="dr-label">Sustento pastoral</div>
+          <div class="dr-value" style="font-size:1.6rem">R$ 1.708,00</div>
         </div>
       </div>
       <div class="tut-alert info mt-3">
         <i class="bi bi-printer me-2"></i>
-        Após salvar, aparece um <strong>Comprovante</strong> com espaço para assinatura do pastor e tesoureiro.
+        Exemplo de uma congregação plenamente formada, sem nivelação e com 1% de fundo local. Depois de fechado e aprovado, o sistema gera o <strong>Relatório Econômico</strong> pronto para imprimir.
       </div>
     </div>
   </div>
@@ -457,12 +452,8 @@
           <td class="small text-muted">Saldo que veio do ano passado</td>
         </tr>
         <tr>
-          <td class="small fw-semibold">% Envío Nacional</td>
-          <td class="small text-muted">Padrão: 15% (0.15)</td>
-        </tr>
-        <tr>
-          <td class="small fw-semibold">% Fundo Local</td>
-          <td class="small text-muted">Padrão: 3% (0.03)</td>
+          <td class="small fw-semibold">Endereço da igreja</td>
+          <td class="small text-muted">Aparece no Relatório Econômico</td>
         </tr>
       </table>
     </div>
@@ -473,8 +464,7 @@
       </div>
       <div class="tut-alert info mt-3">
         <i class="bi bi-info-circle me-2"></i>
-        Para as porcentagens de dízimo, use números decimais:<br>
-        15% = <code>0.15</code> &nbsp; | &nbsp; 3% = <code>0.03</code> &nbsp; | &nbsp; 10% = <code>0.10</code>
+        Os percentuais de envio não ficam nas configurações: vêm da carta anual (menu “Carta anual”).
       </div>
     </div>
   </div>
@@ -560,7 +550,8 @@
       ('O que é o Saldo Ano Anterior?', 'É o dinheiro que sobrou do ano passado e que carrega para o novo ano. Configure em Configurações → "Saldo Ano Anterior". Esse valor é somado ao saldo atual do dashboard.'),
       ('Como exportar os dados para Excel?', 'Vá em Relatórios → clique no botão verde "Exportar Excel" no canto superior direito. Será baixado um arquivo .xlsx com o extrato completo e resumo mensal.'),
       ('Os dados de uma congregação aparecem para outra?', 'Não. Cada congregação tem seus dados 100% separados. Uma congregação nunca vê os dados de outra.'),
-      ('Como alterar as porcentagens dos dízimos?', 'Vá em Configurações e ajuste os campos "% Envío Nacional" e "% Fundo Local". Use formato decimal: 15% = 0.15. Salve e a mudança será aplicada nos próximos cálculos.'),
+      ('Como alterar as porcentagens dos dízimos?', 'Os percentuais vêm da carta anual emitida pela Tesouraria Nacional e confirmada pelo pastor. Se algo estiver errado, fale com a Tesouraria Nacional.'),
+      ('Errei um lançamento de um mês já fechado. E agora?', 'Peça ao pastor para reabrir o mês em “Fechar o mês”, informando o motivo. Corrija, feche de novo e refaça a aprovação. Depois que a nacional confirma o recebimento, só a Tesouraria Nacional pode ajudar.'),
     ] %}
     {% for i, (pergunta, resposta) in enumerate(faqs) %}
     <div class="accordion-item border-0 mb-2">

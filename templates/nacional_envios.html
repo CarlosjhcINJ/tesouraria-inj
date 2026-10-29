@@ -1,0 +1,83 @@
+{% extends 'base.html' %}
+{% block title %}Envios das congregações — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Envios das congregações</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h1 class="page-title">Envios das congregações</h1>
+    <p class="text-muted mb-0 small">Situação de cada mês de {{ ano }}. O prazo de cada envio é o dia 5 do mês seguinte (§ 80). Meses antes do início do uso do sistema aparecem apagados e não contam como atraso.</p>
+  </div>
+  <form class="d-flex gap-2 align-items-center">
+    <label class="form-label mb-0 small fw-semibold">Ano:</label>
+    <select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
+      {% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+
+{% set graves = linhas | selectattr('atrasados', 'gt', 2) | list %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="stat-card entrada"><div class="stat-label">Enviado no ano</div><div class="stat-value" style="font-size:1.15rem">{{ total_ano | brl }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card saldo"><div class="stat-label">Recebimento confirmado</div><div class="stat-value" style="font-size:1.15rem">{{ total_recebido | brl }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card dizimo"><div class="stat-label">Congregações ativas</div><div class="stat-value" style="font-size:1.15rem">{{ linhas | length }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card saida"><div class="stat-label">Com mais de 2 meses em atraso</div><div class="stat-value" style="font-size:1.15rem">{{ graves | length }}</div></div></div>
+</div>
+
+{% if graves %}
+<div class="alert alert-danger small"><i class="bi bi-exclamation-octagon me-1"></i>
+  Mais de dois meses sem envio (§ 24, chamado da Tesouraria Nacional): {{ graves | map(attribute='c') | map(attribute='nome') | join(', ') }}.
+</div>
+{% endif %}
+
+<div class="table-card">
+  <div class="table-header d-flex flex-wrap gap-3 align-items-center">
+    <h6 class="mb-0"><i class="bi bi-grid-3x3-gap me-2 text-primary"></i>Mês a mês</h6>
+    <span class="small"><span class="mes-cel recebido d-inline-block px-2">Recebido</span> <span class="mes-cel enviado d-inline-block px-2">Enviado</span> <span class="mes-cel aprovado d-inline-block px-2">Fechado, sem depósito</span> <span class="mes-cel atrasado d-inline-block px-2">Atrasado</span> <span class="mes-cel d-inline-block px-2">Ainda no prazo</span></span>
+  </div>
+  <div class="table-responsive">
+    <table class="table mb-0 align-middle">
+      <thead><tr><th style="min-width:180px">Congregação</th><th>Carta {{ ano }}</th><th style="min-width:520px">Meses</th><th class="text-end">Atrasos</th></tr></thead>
+      <tbody>
+        {% for l in linhas %}
+        <tr>
+          <td class="fw-semibold">{{ l.c['nome'] }}</td>
+          <td class="small">
+            {% if l.comp %}<a href="{{ url_for('nacional_carta_ver', cid=l.c['id'], ano=ano) }}">{{ CATEGORIAS_CONG[l.comp['categoria']] }}</a>
+              {% if not l.comp['confirmado_em'] %}<span class="text-warning-emphasis d-block">não confirmada</span>{% endif %}
+            {% else %}<span class="text-danger">não emitida</span>{% endif %}
+          </td>
+          <td>
+            <div class="mes-grid">
+              {% for m in l.meses %}
+                {% set f = m.f %}
+                {% set cls = (f['status'] if f else '') ~ (' atrasado' if m.atrasado else '') %}
+                {% if f %}
+                <a class="mes-cel {{ cls }}" href="{{ url_for('fechamento_relatorio', fid=f['id']) }}" target="_blank"
+                   title="{{ MESES[m.m - 1] | capitalize }}: {{ STATUS_FECH[f['status']][0] }} · {{ f['total'] | brl }}">{{ MESES[m.m - 1][:3] | capitalize }}</a>
+                {% else %}
+                <span class="mes-cel {{ cls }}" {% if m.antes %}style="opacity:.35"{% endif %} title="{{ MESES[m.m - 1] | capitalize }}: {{ 'atrasado' if m.atrasado else ('antes do início do sistema' if m.antes else 'sem fechamento') }}">{{ MESES[m.m - 1][:3] | capitalize }}</span>
+                {% endif %}
+              {% endfor %}
+            </div>
+            {% if papel == 'admin' %}
+              {% for m in l.meses if m.f and m.f['status'] == 'enviado' %}
+              <form method="POST" action="{{ url_for('nacional_receber', fid=m.f['id']) }}" class="d-inline-block mt-1 me-1">
+                <button class="btn btn-xs btn-outline-success" style="padding:1px 8px; font-size:.7rem" title="Confirmar que o depósito caiu na conta">
+                  Confirmar {{ MESES[m.m - 1][:3] }} · {{ m.f['total'] | brl }}
+                </button>
+                <a href="{{ url_for('fechamento_arquivo', fid=m.f['id']) }}" target="_blank" class="small ms-1" title="Ver comprovante"><i class="bi bi-paperclip"></i></a>
+              </form>
+              {% endfor %}
+            {% endif %}
+          </td>
+          <td class="text-end">{% if l.atrasados %}<span class="badge {{ 'bg-danger' if l.atrasados > 2 else 'bg-warning text-dark' }}">{{ l.atrasados }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
+        </tr>
+        {% else %}
+        <tr><td colspan="4" class="text-center text-muted py-5">Nenhuma congregação ativa. Cadastre em “Congregações e usuários”.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

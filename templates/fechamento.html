@@ -1,0 +1,161 @@
+{% extends 'base.html' %}
+{% block title %}Fechar o mês — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Fechar o mês</li>{% endblock %}
+
+{% block content %}
+{% set nome_mes = MESES[mes - 1] %}
+{% set st = f['status'] if f else 'aberto' %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h1 class="page-title">Fechar o mês</h1>
+    <p class="text-muted mb-0 small">{{ nome_mes | capitalize }} de {{ ano }} · prazo do envio: {{ limite.strftime('%d/%m/%Y') }} (§ 80)</p>
+  </div>
+  <form class="d-flex gap-2 align-items-center">
+    <select name="mes" class="form-select form-select-sm" style="width:140px" onchange="this.form.submit()">
+      {% for m in MESES %}<option value="{{ loop.index }}" {% if loop.index == mes %}selected{% endif %}>{{ m | capitalize }}</option>{% endfor %}
+    </select>
+    <select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
+      {% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+
+<div class="form-card mb-3 py-3">
+  <div class="mes-grid mb-3">
+    {% for m in MESES %}{% set s = status_ano.get(loop.index) %}
+    <a class="mes-cel {{ s or '' }} {% if loop.index == mes %}border border-dark{% endif %}" href="{{ url_for('fechamento', ano=ano, mes=loop.index) }}" title="{{ STATUS_FECH[s][0] if s else 'Aberto' }}">{{ m[:3] | capitalize }}</a>
+    {% endfor %}
+  </div>
+  {% set ordem = ['aberto','fechado','aprovado','enviado','recebido'] %}
+  {% set idx = ordem.index(st) %}
+  <div class="passos">
+    {% for rotulo in ['1. Lançar no mês','2. Tesoureiro fecha','3. Pastor aprova','4. Depósito e comprovante','5. Nacional confirma'] %}
+    <span class="passo {% if loop.index0 < idx %}feito{% elif loop.index0 == idx %}atual{% endif %}">{{ rotulo }}</span>
+    {% endfor %}
+  </div>
+</div>
+
+{% if not comp and not f %}
+<div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>
+  A Tesouraria Nacional ainda não emitiu a carta anual de {{ ano }}. Sem ela o sistema não sabe os percentuais desta congregação e o mês não pode ser fechado.
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="form-card h-100">
+      <div class="form-section-title"><i class="bi bi-calculator me-2"></i>{{ 'Cálculo registrado no fechamento' if f else 'Cálculo do sistema' }}</div>
+      {% if calc %}
+        {% set liq = calc.liquidacao %}
+        <div class="calc-linha"><span>Dízimo bruto do mês</span><span class="v">{{ liq.bruto | brl }}</span></div>
+        <div class="calc-linha"><span>− Dízimo dos Dízimos (10%)<span class="base">vai para a Tesouraria Nacional</span></span><span class="v">{{ liq.dd | brl }}</span></div>
+        <div class="calc-linha"><span>− Nivelação (5%)<span class="base">{{ 'fundo nacional de nivelação' if calc.compromisso.nivelacao else 'não se aplica' }}</span></span><span class="v">{{ liq.niv | brl }}</span></div>
+        <div class="calc-linha"><span>− Betel (4%)<span class="base">{{ ('sobre ' ~ (liq.base_betel | brl)) if calc.compromisso.betel else 'só para plenamente formada' }}</span></span><span class="v">{{ liq.betel | brl }}</span></div>
+        <div class="calc-linha"><span>− Fundo local ({{ calc.compromisso.fundo_local_pct }}%)<span class="base">fica na congregação</span></span><span class="v">{{ liq.fundo_local | brl }}</span></div>
+        <div class="calc-linha total"><span>Sustento pastoral (§ 66)</span><span class="v">{{ liq.liquido | brl }}</span></div>
+        {% for a in calc.avisos %}
+          <div class="alert alert-warning py-2 px-3 mt-3 mb-0 small"><i class="bi bi-exclamation-circle me-1"></i>{{ a }}</div>
+        {% endfor %}
+        {% if not f %}<p class="small text-muted mt-3 mb-0">O cálculo usa os dízimos e os lançamentos do livro “Envios” deste mês. Confira antes de fechar: depois de fechado, só o pastor reabre.</p>{% endif %}
+      {% else %}
+        <p class="text-muted mb-0">Sem carta anual, não há cálculo.</p>
+      {% endif %}
+    </div>
+  </div>
+
+  <div class="col-lg-6">
+    <div class="form-card h-100">
+      <div class="form-section-title"><i class="bi bi-check2-square me-2"></i>Próximo passo</div>
+      {% if st == 'aberto' %}
+        {% if calc and papel == 'tesoureiro' %}
+          <p>Total a enviar: <strong class="fs-5">{{ calc.total | brl }}</strong></p>
+          <form method="POST" action="{{ url_for('fechamento_fechar') }}" onsubmit="return confirm('Fechar {{ nome_mes }}/{{ ano }}? Depois disso não dá para lançar nem corrigir este mês sem o pastor reabrir.')">
+            <input type="hidden" name="ano" value="{{ ano }}"/><input type="hidden" name="mes" value="{{ mes }}"/>
+            <button class="btn btn-primary-custom"><i class="bi bi-lock me-2"></i>Fechar {{ nome_mes }}</button>
+          </form>
+        {% elif calc %}
+          <p class="text-muted mb-0">Aguardando o tesoureiro fechar o mês.</p>
+        {% endif %}
+      {% elif st == 'fechado' %}
+        <p>O tesoureiro fechou o mês. Total a enviar: <strong>{{ f['total'] | brl }}</strong>.</p>
+        {% if papel == 'pastor' %}
+          <form method="POST" action="{{ url_for('fechamento_aprovar', fid=f['id']) }}" class="mb-3">
+            <button class="btn btn-success"><i class="bi bi-check-circle me-2"></i>Aprovar relatório</button>
+          </form>
+        {% else %}
+          <p class="text-muted">Aguardando a aprovação do pastor.</p>
+        {% endif %}
+      {% elif st == 'aprovado' %}
+        <p>Relatório aprovado. Deposite <strong>{{ f['total'] | brl }}</strong> até <strong>{{ limite.strftime('%d/%m/%Y') }}</strong> na conta nacional:</p>
+        <div class="p-3 rounded-xl mb-3 small" style="background:#f8fafc; border:1px solid #eef0f4">
+          <div><strong>{{ nacional.favorecido }}</strong> · CNPJ {{ nacional.cnpj }}</div>
+          <div>{{ nacional.banco }} · Agência {{ nacional.agencia }} · Operação {{ nacional.operacao }}</div>
+          <div>Conta {{ nacional.conta }}</div>
+          <div>Pix: {{ nacional.pix }}</div>
+        </div>
+        {% if papel == 'tesoureiro' %}
+        <form method="POST" action="{{ url_for('fechamento_comprovante', fid=f['id']) }}" enctype="multipart/form-data">
+          <div class="row g-2 mb-2">
+            <div class="col-6"><label class="form-label">Valor do comprovante</label>
+              <input type="text" name="valor" class="form-control" required inputmode="decimal" placeholder="0,00"/></div>
+            <div class="col-6"><label class="form-label">Data do depósito</label>
+              <input type="date" name="data" class="form-control" required value="{{ now().strftime('%Y-%m-%d') }}"/></div>
+          </div>
+          <label class="form-label">Arquivo do comprovante</label>
+          <input type="file" name="arquivo" class="form-control mb-3" required accept="application/pdf,image/jpeg,image/png,image/webp"/>
+          <button class="btn btn-primary-custom"><i class="bi bi-upload me-2"></i>Enviar comprovante</button>
+          <div class="form-text">O mês só trava se o valor do comprovante for igual ao total do relatório.</div>
+        </form>
+        {% else %}
+          <p class="text-muted">Aguardando o tesoureiro anexar o comprovante.</p>
+        {% endif %}
+      {% elif st in ('enviado', 'recebido') %}
+        <p><i class="bi bi-lock-fill me-1"></i>Mês travado. Depósito de <strong>{{ f['comprovante_valor'] | brl }}</strong> em {{ f['comprovante_data'] | data }}.</p>
+        {% if f['comprovante_data'] and f['comprovante_data'] > limite.isoformat() %}
+          <div class="alert alert-warning py-2 small">Depósito feito depois do prazo de {{ limite.strftime('%d/%m') }} (§ 80).</div>
+        {% endif %}
+        <a href="{{ url_for('fechamento_arquivo', fid=f['id']) }}" target="_blank" class="btn btn-sm btn-outline-secondary mb-3"><i class="bi bi-paperclip me-1"></i>Ver comprovante</a>
+        <p class="mb-0">{{ 'A Tesouraria Nacional confirmou o recebimento em ' ~ (f['recebido_em'] | data) ~ '.' if st == 'recebido' else 'Aguardando a Tesouraria Nacional confirmar o recebimento.' }}</p>
+      {% endif %}
+
+      {% if f and papel == 'pastor' and st != 'recebido' %}
+        <hr/>
+        <details>
+          <summary class="small text-muted">Reabrir o mês para correção</summary>
+          <form method="POST" action="{{ url_for('fechamento_reabrir', fid=f['id']) }}" class="mt-2">
+            <textarea name="motivo" class="form-control mb-2" rows="2" required minlength="5" placeholder="Motivo da reabertura (fica registrado)"></textarea>
+            <button class="btn btn-sm btn-outline-danger"><i class="bi bi-unlock me-1"></i>Reabrir {{ nome_mes }}</button>
+          </form>
+        </details>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+{% if calc %}
+<div class="table-card mt-4">
+  <div class="table-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+    <h6 class="mb-0"><i class="bi bi-file-earmark-text me-2 text-primary"></i>Relatório Econômico {{ '(prévia)' if not f else '' }}</h6>
+    {% if f %}<a href="{{ url_for('fechamento_relatorio', fid=f['id']) }}" target="_blank" class="btn btn-sm btn-outline-primary"><i class="bi bi-printer me-1"></i>Abrir para imprimir ou salvar em PDF</a>{% endif %}
+  </div>
+  <div class="row g-0">
+    <div class="col-md-6 p-3">
+      <div class="small fw-bold text-uppercase text-muted mb-2">Nacional</div>
+      {% for l in calc.nacional %}
+      <div class="calc-linha {% if not l.valor %}text-muted{% endif %}"><span>{{ l.rotulo }}{% if l.base %}<span class="base">base {{ l.base | brl }}</span>{% endif %}</span><span class="v">{{ l.valor | brl }}</span></div>
+      {% endfor %}
+      <div class="calc-linha total"><span>Subtotal nacional</span><span class="v">{{ calc.total_nacional | brl }}</span></div>
+    </div>
+    <div class="col-md-6 p-3">
+      <div class="small fw-bold text-uppercase text-muted mb-2">Distrital</div>
+      {% for l in calc.distrital %}
+      <div class="calc-linha {% if not l.valor %}text-muted{% endif %}"><span>{{ l.rotulo }}</span><span class="v">{{ l.valor | brl }}</span></div>
+      {% endfor %}
+      <div class="calc-linha total"><span>Subtotal distrital</span><span class="v">{{ calc.total_distrital | brl }}</span></div>
+      <div class="calc-linha total fs-5"><span>Total a depositar</span><span class="v">{{ calc.total | brl }}</span></div>
+    </div>
+  </div>
+</div>
+<p class="small text-muted mt-2">As ofertas vêm dos lançamentos do livro “Envios / Missões” do mês (tipo Entrada). Todos os envios, inclusive os distritais, vão para a conta nacional.</p>
+{% endif %}
+{% endblock %}

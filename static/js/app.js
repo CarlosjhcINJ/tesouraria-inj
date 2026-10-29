@@ -73,9 +73,7 @@ function formatBRL(input) {
 
 // ── Confirmar exclusão ───────────────────────
 function confirmarExclusao(form, msg) {
-  if (confirm(msg || 'Tem certeza que deseja excluir este registro?')) {
-    form.submit();
-  }
+  return confirm(msg || 'Tem certeza que deseja excluir este registro?');
 }
 
 // ── Gráfico de Fluxo Mensal ──────────────────

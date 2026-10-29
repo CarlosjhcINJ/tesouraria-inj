@@ -1,0 +1,61 @@
+{% extends 'base.html' %}
+{% block title %}Regras e conta — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Regras e conta</li>{% endblock %}
+
+{% block content %}
+<div class="mb-4">
+  <h1 class="page-title">Regras e conta nacional</h1>
+  <p class="text-muted mb-0 small">Cada regra tem data de vigência. Uma mudança cria uma nova vigência; os meses anteriores continuam calculados com a regra antiga.</p>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="table-card">
+      <div class="table-header"><h6><i class="bi bi-sliders me-2 text-primary"></i>Regras vigentes hoje</h6></div>
+      <div class="table-responsive">
+        <table class="table mb-0">
+          <thead><tr><th>Regra</th><th class="text-end">Valor</th><th>Histórico</th></tr></thead>
+          <tbody>
+            {% for chave, rotulo in rotulos.items() %}
+            <tr>
+              <td>{{ rotulo }}<span class="d-block small text-muted"><code>{{ chave }}</code></span></td>
+              <td class="text-end fw-semibold">{{ '%.4g' | format(vigentes.get(chave, 0)) }}</td>
+              <td class="small text-muted">
+                {% for r in regras if r['chave'] == chave %}{{ '%.4g' | format(r['valor']) }} desde {{ r['vigencia'] | data }}{% if not loop.last %} · {% endif %}{% endfor %}
+              </td>
+            </tr>
+            {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="form-card mb-4">
+      <div class="form-section-title"><i class="bi bi-plus-circle me-2"></i>Nova vigência</div>
+      <form method="POST">
+        <input type="hidden" name="acao" value="regra"/>
+        <label class="form-label">Regra</label>
+        <select name="chave" class="form-select mb-2">{% for chave, rotulo in rotulos.items() %}<option value="{{ chave }}">{{ rotulo }}</option>{% endfor %}</select>
+        <div class="row g-2 mb-3">
+          <div class="col-6"><label class="form-label">Valor</label><input type="text" name="valor" class="form-control" required placeholder="Ex.: 1700 ou 0.10"/></div>
+          <div class="col-6"><label class="form-label">Vale a partir de</label><input type="date" name="vigencia" class="form-control" required/></div>
+        </div>
+        <button class="btn btn-primary-custom w-100"><i class="bi bi-save me-2"></i>Registrar vigência</button>
+        <div class="form-text">Percentuais em fração: 10% = 0.10. Exemplo: novo salário mínimo a partir de 01/01/2027.</div>
+      </form>
+    </div>
+    <div class="form-card">
+      <div class="form-section-title"><i class="bi bi-bank me-2"></i>Conta nacional (aparece no relatório)</div>
+      <form method="POST">
+        <input type="hidden" name="acao" value="conta"/>
+        {% for k in campos_conta %}
+        <label class="form-label small mb-0">{{ {'cnpj':'CNPJ','banco':'Banco','agencia':'Agência','operacao':'Operação','conta':'Conta','pix':'Chave Pix','favorecido':'Favorecido','endereco_sede':'Endereço da sede','inicio_uso':'Início do uso do sistema (AAAA-MM)'}[k] }}</label>
+        <input type="text" name="{{ k }}" class="form-control form-control-sm mb-2" value="{{ nacional.get(k, '') }}"/>
+        {% endfor %}
+        <button class="btn btn-outline-primary w-100 mt-2"><i class="bi bi-save me-2"></i>Salvar dados da conta</button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endblock %}

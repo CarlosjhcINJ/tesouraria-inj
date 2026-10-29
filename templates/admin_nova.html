@@ -1,52 +1,40 @@
 {% extends 'base.html' %}
-{% block title %}Nova Congregação{% endblock %}
+{% block title %}Nova congregação{% endblock %}
 {% block breadcrumb %}
-<li class="breadcrumb-item"><a href="{{ url_for('admin') }}">Administrador</a></li>
-<li class="breadcrumb-item active">Nova Congregação</li>
+<li class="breadcrumb-item"><a href="{{ url_for('admin') }}">Congregações e usuários</a></li>
+<li class="breadcrumb-item active">Nova congregação</li>
 {% endblock %}
 
 {% block content %}
 <div class="row justify-content-center">
-  <div class="col-lg-5">
+  <div class="col-lg-7">
     <div class="form-card">
-      <div class="form-section-title">
-        <i class="bi bi-building-add me-2"></i>Cadastrar Nova Congregação
-      </div>
+      <div class="form-section-title"><i class="bi bi-building-add me-2"></i>Cadastrar nova congregação</div>
       <form method="POST">
-
-        <div class="mb-3">
-          <label class="form-label">Nome da Congregação</label>
-          <input type="text" name="nome" class="form-control" required
-                 placeholder="Ex: Igreja do Nome de Jesus — São Paulo"/>
-        </div>
-
-        <div class="mb-3">
-          <label class="form-label">Usuário de Acesso</label>
-          <input type="text" name="usuario" class="form-control" required
-                 placeholder="Ex: inj-saopaulo (sem espaços, sem acentos)"
-                 pattern="[a-z0-9\-_]+" title="Apenas letras minúsculas, números, - e _"/>
-          <div class="form-text">Use letras minúsculas e sem espaços. Ex: <code>inj-campinas</code></div>
-        </div>
-
         <div class="mb-4">
-          <label class="form-label">Senha Inicial</label>
-          <input type="password" name="senha" class="form-control" required
-                 minlength="6" placeholder="Mínimo 6 caracteres"/>
-          <div class="form-text">O tesoureiro poderá alterar a senha depois de entrar.</div>
+          <label class="form-label">Nome da congregação</label>
+          <input type="text" name="nome" class="form-control" required placeholder="Ex.: Vila Ramos/SP"/>
         </div>
-
-        <div class="alert alert-info py-2 px-3" style="font-size:.82rem">
-          <i class="bi bi-shield-check me-1"></i>
-          Os dados desta congregação serão completamente separados das outras.
+        <div class="row g-4">
+          <div class="col-md-6">
+            <div class="fw-semibold mb-2"><i class="bi bi-person-check me-1"></i>Tesoureiro(a)</div>
+            <label class="form-label small">Nome</label><input type="text" name="tes_nome" class="form-control form-control-sm mb-2" required/>
+            <label class="form-label small">Usuário</label><input type="text" name="tes_usuario" class="form-control form-control-sm mb-2" required pattern="[a-z0-9._\-]+" placeholder="ex.: vilaramos.tesouraria"/>
+            <label class="form-label small">Senha inicial</label><input type="password" name="tes_senha" class="form-control form-control-sm" required minlength="8"/>
+          </div>
+          <div class="col-md-6">
+            <div class="fw-semibold mb-2"><i class="bi bi-person-circle me-1"></i>Pastor</div>
+            <label class="form-label small">Nome</label><input type="text" name="pas_nome" class="form-control form-control-sm mb-2"/>
+            <label class="form-label small">Usuário</label><input type="text" name="pas_usuario" class="form-control form-control-sm mb-2" pattern="[a-z0-9._\-]+" placeholder="ex.: vilaramos.pastor"/>
+            <label class="form-label small">Senha inicial</label><input type="password" name="pas_senha" class="form-control form-control-sm" minlength="8"/>
+          </div>
         </div>
-
+        <div class="alert alert-info py-2 px-3 mt-4 small mb-0">
+          Os dados desta congregação ficam separados das outras. Uma congregação nova começa do zero: emita a carta anual dela em “Cartas anuais”.
+        </div>
         <div class="d-flex gap-2 mt-4">
-          <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary flex-fill">
-            <i class="bi bi-x-lg me-1"></i>Cancelar
-          </a>
-          <button type="submit" class="btn btn-primary-custom flex-fill">
-            <i class="bi bi-save me-2"></i>Cadastrar
-          </button>
+          <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary flex-fill">Cancelar</a>
+          <button type="submit" class="btn btn-primary-custom flex-fill"><i class="bi bi-save me-2"></i>Cadastrar</button>
         </div>
       </form>
     </div>

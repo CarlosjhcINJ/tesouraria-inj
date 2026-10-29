@@ -1,0 +1,90 @@
+{% extends 'base.html' %}
+{% block title %}Cartas anuais {{ ano }} — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Cartas anuais</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h1 class="page-title">Cartas anuais de {{ ano }}</h1>
+    <p class="text-muted mb-0 small">
+      Base: dízimos de {{ MESES[janela[0][1] - 1] }}/{{ janela[0][0] }} a {{ MESES[janela[-1][1] - 1] }}/{{ janela[-1][0] }},
+      salário mínimo de {{ sm | brl }}. Em formação a partir de 1/3 do salário; nivelação acima de 1,25 salário.
+    </p>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    <form class="d-flex gap-2 align-items-center">
+      <label class="form-label mb-0 small fw-semibold">Ano:</label>
+      <select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
+        {% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}
+      </select>
+    </form>
+    <form method="POST" onsubmit="return confirm('Emitir a carta de {{ ano }} para todas as congregações que ainda não têm? As já emitidas não mudam.')">
+      <input type="hidden" name="ano" value="{{ ano }}"/><input type="hidden" name="acao" value="todas"/>
+      <button class="btn btn-primary-custom btn-sm"><i class="bi bi-send me-1"></i>Emitir as que faltam</button>
+    </form>
+  </div>
+</div>
+
+<div class="table-card">
+  <div class="table-responsive">
+    <table class="table mb-0 align-middle">
+      <thead><tr><th>Congregação</th><th class="text-end">Média mensal</th><th>Cálculo do sistema</th><th>Carta emitida</th><th></th></tr></thead>
+      <tbody>
+        {% for l in linhas %}{% set p = l.proposta %}{% set a = l.atual %}
+        <tr>
+          <td class="fw-semibold">{{ l.c['nome'] }}</td>
+          <td class="text-end small">{{ p.media | brl }}<span class="d-block text-muted">{{ p.meses }} meses</span></td>
+          <td class="small">
+            <b>{{ CATEGORIAS_CONG[p.categoria] }}</b> · fundo local {{ p.fundo_local_pct }}%
+            {% if p.nivelacao %} · nivelação{% endif %}{% if p.betel %} · Betel{% endif %}
+          </td>
+          <td class="small">
+            {% if a %}
+              <a href="{{ url_for('nacional_carta_ver', cid=l.c['id'], ano=ano) }}">{{ CATEGORIAS_CONG[a['categoria']] }} · {{ a['fundo_local_pct'] }}%</a>
+              <span class="d-block {{ 'text-success' if a['confirmado_em'] else 'text-warning-emphasis' }}">{{ 'confirmada pelo pastor' if a['confirmado_em'] else 'aguardando o pastor' }}</span>
+            {% else %}<span class="text-muted">não emitida</span>{% endif %}
+          </td>
+          <td class="text-end">
+            <div class="d-flex gap-1 justify-content-end">
+              <form method="POST"><input type="hidden" name="ano" value="{{ ano }}"/><input type="hidden" name="acao" value="emitir"/><input type="hidden" name="cong_id" value="{{ l.c['id'] }}"/>
+                <button class="btn btn-sm btn-outline-primary" title="Emitir com o cálculo do sistema">{{ 'Reemitir' if a else 'Emitir' }}</button></form>
+              <button class="btn btn-sm btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#manual{{ l.c['id'] }}" title="Ajustar à mão">Ajustar</button>
+            </div>
+            <div class="modal fade text-start" id="manual{{ l.c['id'] }}" tabindex="-1">
+              <div class="modal-dialog"><div class="modal-content">
+                <form method="POST">
+                  <div class="modal-header"><h6 class="modal-title">Ajustar carta {{ ano }} — {{ l.c['nome'] }}</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+                  <div class="modal-body">
+                    <input type="hidden" name="ano" value="{{ ano }}"/><input type="hidden" name="acao" value="manual"/><input type="hidden" name="cong_id" value="{{ l.c['id'] }}"/>
+                    {% set base = a or p %}
+                    <label class="form-label small">Categoria</label>
+                    <select name="categoria" class="form-select form-select-sm mb-2">
+                      {% for k, v in CATEGORIAS_CONG.items() %}<option value="{{ k }}" {% if base['categoria'] == k %}selected{% endif %}>{{ v }}</option>{% endfor %}
+                    </select>
+                    <div class="row g-2 mb-2">
+                      <div class="col-4"><label class="form-label small">Fundo local %</label><input type="number" name="fundo_local_pct" min="0" max="30" class="form-control form-control-sm" value="{{ base['fundo_local_pct'] }}"/></div>
+                      <div class="col-4"><label class="form-label small">Nivelação 5%</label><select name="nivelacao" class="form-select form-select-sm"><option value="1" {% if base['nivelacao'] %}selected{% endif %}>Sim</option><option value="0" {% if not base['nivelacao'] %}selected{% endif %}>Não</option></select></div>
+                      <div class="col-4"><label class="form-label small">Betel 4%</label><select name="betel" class="form-select form-select-sm"><option value="1" {% if base['betel'] %}selected{% endif %}>Sim</option><option value="0" {% if not base['betel'] %}selected{% endif %}>Não</option></select></div>
+                    </div>
+                    <div class="row g-2 mb-2">
+                      <div class="col-6"><label class="form-label small">Média mensal usada</label><input type="number" step="0.01" name="media" class="form-control form-control-sm" value="{{ base['media'] }}"/></div>
+                      <div class="col-6"><label class="form-label small">Meses na média</label><input type="number" name="meses" class="form-control form-control-sm" value="{{ base['meses'] }}"/></div>
+                    </div>
+                    <label class="form-label small">Observação (aparece na carta)</label>
+                    <input type="text" name="observacao" class="form-control form-control-sm" placeholder="Ex.: valores da planilha de 2025"/>
+                    <div class="form-text">Use o ajuste para congregações cujos dízimos do ano anterior não estão no sistema. Reemitir apaga a confirmação do pastor.</div>
+                  </div>
+                  <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-sm btn-primary-custom">Emitir carta</button></div>
+                </form>
+              </div></div>
+            </div>
+          </td>
+        </tr>
+        {% else %}
+        <tr><td colspan="5" class="text-center text-muted py-5">Nenhuma congregação ativa.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

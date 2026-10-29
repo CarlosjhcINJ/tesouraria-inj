@@ -1,310 +1,465 @@
 """
 Tesouraria INJ — Sistema de Gestão Financeira Multi-Congregação
 Igreja do Nome de Jesus
+
+Perfis:
+  tesoureiro  — lança, fecha o mês, anexa comprovantes (uma congregação)
+  pastor      — consulta, aprova o fechamento, reabre mês, confirma a carta anual
+  admin       — Tesouraria Nacional: congregações, usuários, regras, cartas, envios
+  supervisor  — consulta os envios de todas as congregações, sem editar
 """
 from flask import (Flask, render_template, request, redirect, url_for,
-                   jsonify, flash, send_file, session, g)
-import sqlite3, os, hashlib, secrets
-from datetime import datetime
-import json, io
+                   jsonify, flash, send_file, session, abort, g)
+from werkzeug.security import generate_password_hash, check_password_hash
+from functools import wraps
+from datetime import datetime, date, timedelta, timezone
+import os, io, json, hashlib, hmac, secrets
+
+import db
+import regras as R
+from regras import MESES
 
 app = Flask(__name__)
-app.secret_key = os.environ.get('SECRET_KEY', secrets.token_hex(32))
+app.secret_key = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    SESSION_COOKIE_SECURE=os.environ.get('COOKIE_SECURE', '1' if db.IS_PG else '0') == '1',
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+    MAX_CONTENT_LENGTH=6 * 1024 * 1024,
+)
 
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH  = os.path.join(BASE_DIR, 'data', 'tesouraria.db')
-
-# ─────────────────────────────────────────────
-#  DADOS FIXOS
-# ─────────────────────────────────────────────
-MESES = ['janeiro','fevereiro','março','abril','maio','junho',
-         'julho','agosto','setembro','outubro','novembro','dezembro']
-
-ANOS  = list(range(2020, 2035))
+ANOS = list(range(2020, 2035))
+MAX_ANEXO = 5 * 1024 * 1024
+MAX_PDF = 2 * 1024 * 1024
+TIPOS_ANEXO = {'application/pdf', 'image/jpeg', 'image/png', 'image/webp'}
 
 LIVROS = ['FundoLocal', 'Projetos', 'Envios', 'LiqDízimos']
-
 LIVROS_LABELS = {
-    'FundoLocal':  'Fundo Local',
-    'Projetos':    'Projetos',
-    'Envios':      'Envios / Missões',
-    'LiqDízimos':  'Liquidação de Dízimos',
+    'FundoLocal': 'Fundo Local',
+    'Projetos': 'Projetos',
+    'Envios': 'Envios / Missões',
+    'LiqDízimos': 'Liquidação de Dízimos',
 }
+FORMAS = ['Dinheiro', 'Pix', 'Banco']
 
 CATEGORIAS = {
     'FundoLocal': {
         'Entrada': sorted([
-            'Comitê de Família','Contribuição do pastor para projetos',
-            'Contribuição Irmão para pastor assembléia','Marcha missionária',
-            'Of. Ação De Graças','Of. Cultos De Quintas','Of. Cultos De Terças',
-            'Of. Cultos Especiais','Of. Cultos Sábados','Of. Domingos à Noite',
-            'Of. Domingos E.B.D','Of. Na Refam','Of. Social (Casos Especiais)',
-            'Oferta de Cavalheiros','Oferta de música','Oferta de obra social',
-            'Outras Ofertas','Parceiros missionários','Voto do talento',
-            'Votos','Votos Para Construção','%DízimosFundoLocal',
+            'Comitê de Família', 'Contribuição do pastor para projetos',
+            'Contribuição de irmão para pastor (assembleia)', 'Marcha missionária',
+            'Of. Ação de Graças', 'Of. Cultos de Quinta', 'Of. Cultos de Terça',
+            'Of. Cultos Especiais', 'Of. Cultos de Sábado', 'Of. Domingo à Noite',
+            'Of. Domingo E.B.D.', 'Of. na Refam', 'Of. Social (Casos Especiais)',
+            'Oferta de Cavalheiros', 'Oferta de Música', 'Oferta de Obra Social',
+            'Outras Ofertas', 'Parceiros Missionários', 'Voto do Talento',
+            'Votos', 'Votos para Construção',
         ]),
         'Saída': sorted([
-            'Aluguel de Casa Pastoral','Aluguel de Caçamba',
-            'Aluguel de Maq. Construção','Aluguel Salão','Atividades legales',
-            'AyudaPastorAux','Cafeteria/Restaurante','Completar uma Oferta',
-            'Compra de Instrumentos','Compra de Materias de Construção',
-            'Compra de Som','Compra de Utiles de limpeza',
-            'Comprar artigos de papelaria','Comprar botijão de gás',
-            'Construção E Reforma','DízimosDoAuxilioEmergencial','DízimosExtras',
-            'Documentação E Escrituras','Evangelismo','Eventos',
-            'Eventos E Alimentação','Manutenção Coz. Da Igreja',
-            'Manutenção de Equipamento','Manutenção de Predio',
-            'Manutenção de Som','Manutenção Do Prédio','Materiais P/ Escritório',
-            'Obra Social','Of. Damas Miss. Fim Ano','Of. Damas Miss. Metade Ano',
-            'Of. Dia Missionário','Of. Distrital','Of. Jovens Miss. Fim Ano',
-            'Of. Jovens Miss. Metade Ano','Of. Raios De Luz',
-            'Of. Safras Para Cristo','Otras Compras pra o Templo',
-            'Otras Saídas de Projetos','Outros Fundo Local','Outros Envios',
-            'Pago de Parcela','Pago Internet','Pago Mão de Obra',
-            'produtos de limpeza','Projetos da diretoria local',
-            'Serviços Públicos','Trabalho C/ Crianças','Trabalho C/ Damas',
-            'Trabalho C/ Jovens','Transferência para o fundo de construção',
-            'Transporte Urbano','Viáticos','Viaticos assambleia','%DízimoDosDízimos',
+            'Aluguel de Casa Pastoral', 'Aluguel de Caçamba',
+            'Aluguel de Máquina de Construção', 'Aluguel do Salão', 'Atividades Legais',
+            'Ajuda ao Pastor Auxiliar', 'Cafeteria / Restaurante', 'Completar uma Oferta',
+            'Compra de Instrumentos', 'Compra de Materiais de Construção',
+            'Compra de Som', 'Compra de Utensílios de Limpeza',
+            'Artigos de Papelaria', 'Botijão de Gás',
+            'Construção e Reforma', 'Documentação e Escrituras', 'Evangelismo', 'Eventos',
+            'Eventos e Alimentação', 'Manutenção da Cozinha',
+            'Manutenção de Equipamento', 'Manutenção do Prédio',
+            'Manutenção de Som', 'Materiais de Escritório',
+            'Obra Social', 'Outras Compras para o Templo',
+            'Outros Fundo Local', 'Pagamento de Parcela', 'Internet', 'Mão de Obra',
+            'Produtos de Limpeza', 'Projetos da Diretoria Local',
+            'Serviços Públicos (água, luz)', 'Trabalho com Crianças', 'Trabalho com Damas',
+            'Trabalho com Jovens', 'Transporte Urbano', 'Viagens', 'Viagem para Assembleia',
         ]),
     },
     'Projetos': {
         'Entrada': sorted([
-            'Atividades - Cantina','Brechós','Eventos','Fundo de Transporte',
-            'Outros Entradas de Projetos','Vendas','Votos','Votos Para Construção',
+            'Atividades - Cantina', 'Brechó', 'Eventos', 'Fundo de Transporte',
+            'Outras Entradas de Projetos', 'Vendas', 'Votos', 'Votos para Construção',
         ]),
         'Saída': sorted([
-            'Aluguel de Caçamba','Aluguel de Maq. Construção',
-            'Compra de Instrumentos','Compra de Materias de Construção',
-            'Compra de Som','Compra de Utiles de limpeza',
-            'DízimosDoAuxilioEmergencial','DízimosExtras',
-            'Manutenção de Predio','Manutenção de Som',
-            'Of. Damas Miss. Fim Ano','Of. Damas Miss. Metade Ano',
-            'Of. Dia Missionário','Of. Distrital','Of. Jovens Miss. Fim Ano',
-            'Of. Jovens Miss. Metade Ano','Of. Raios De Luz',
-            'Of. Safras Para Cristo','Otras Compras pra o Templo',
-            'Otras Saídas de Projetos','Outros Envios',
-            'Pago de Parcela','Pago Mão de Obra','%DízimoDosDízimos',
+            'Aluguel de Caçamba', 'Aluguel de Máquina de Construção',
+            'Compra de Instrumentos', 'Compra de Materiais de Construção',
+            'Compra de Som', 'Manutenção do Prédio', 'Manutenção de Som',
+            'Outras Compras para o Templo', 'Outras Saídas de Projetos',
+            'Pagamento de Parcela', 'Mão de Obra',
         ]),
     },
     'Envios': {
-        'Entrada': sorted([
-            '%DízimoDosDízimos','Of. Dia Missionário','Of. Raios De Luz',
-            'Of. Safras Para Cristo','Of. Jovens Miss. Metade Ano',
-            'Of. Jovens Miss. Fim Ano','Of. Damas Miss. Metade Ano',
-            'Of. Damas Miss. Fim Ano','Of. Distrital',
-        ]),
-        'Saída': sorted([
-            '%DízimoDosDízimos','DízimosDoAuxilioEmergencial','DízimosExtras',
-            'Of. Damas Miss. Fim Ano','Of. Damas Miss. Metade Ano',
-            'Of. Dia Missionário','Of. Distrital','Of. Jovens Miss. Fim Ano',
-            'Of. Jovens Miss. Metade Ano','Of. Raios De Luz',
-            'Of. Safras Para Cristo','Outros Envios',
-        ]),
+        'Entrada': R.ITENS_ENVIO,
+        'Saída': ['Outros Envios'],
     },
     'LiqDízimos': {
-        'Entrada': sorted([
-            'DízimoBruto','%DízimoDosDízimos','%DízimosFundoLocal',
-            'LíquidoPastor','OtrosDízimos','DízimosDoAuxilioEmergencial','DízimosExtras',
-        ]),
-        'Saída': sorted([
-            '%DízimoDosDízimos','%DízimosFundoLocal','LíquidoPastor',
-            'Envío Nacional','Aporte ao Fundo Local','OtrosDízimos',
-        ]),
+        'Entrada': ['Outros Dízimos'],
+        'Saída': ['Outros Dízimos'],
     },
 }
 
-# ─────────────────────────────────────────────
-#  BANCO DE DADOS
-# ─────────────────────────────────────────────
-def get_db():
-    conn = sqlite3.connect(DB_PATH)
-    conn.row_factory = sqlite3.Row
-    return conn
+PAPEIS = {'tesoureiro': 'Tesoureiro(a)', 'pastor': 'Pastor', 'admin': 'Tesouraria Nacional',
+          'supervisor': 'Supervisor (consulta)'}
+STATUS_FECH = {
+    'fechado': ('Aguardando aprovação do pastor', 'warning'),
+    'aprovado': ('Aguardando comprovante', 'info'),
+    'enviado': ('Enviado · mês travado', 'primary'),
+    'recebido': ('Recebido pela nacional', 'success'),
+}
 
-def hash_senha(senha):
-    return hashlib.sha256(senha.encode('utf-8')).hexdigest()
+# ═════════════════════════════════════════════
+#  BANCO DE DADOS
+# ═════════════════════════════════════════════
+def get_db():
+    return db.connect()
+
+
+def _cols(conn, table):
+    if db.IS_PG:
+        rows = conn.execute("SELECT column_name AS c FROM information_schema.columns WHERE table_name = ?",
+                            (table,)).fetchall()
+        return {r['c'] for r in rows}
+    return {r['name'] for r in conn.execute(f'PRAGMA table_info({table})').fetchall()}
+
+
+def _add_col(conn, table, col, ddl):
+    if col not in _cols(conn, table):
+        conn.execute(f'ALTER TABLE {table} ADD COLUMN {col} {ddl}')
+
 
 def init_db():
-    os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     conn = get_db()
-    c = conn.cursor()
+    PK, BLOB = db.PK, db.BLOB
+    stmts = [
+        f'''CREATE TABLE IF NOT EXISTS congregacoes (
+            id {PK}, nome TEXT NOT NULL, ativo INTEGER DEFAULT 1,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''',
+        f'''CREATE TABLE IF NOT EXISTS usuarios (
+            id {PK}, cong_id INTEGER REFERENCES congregacoes(id),
+            nome TEXT NOT NULL, usuario TEXT NOT NULL UNIQUE, senha_hash TEXT NOT NULL,
+            papel TEXT NOT NULL, ativo INTEGER DEFAULT 1,
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''',
+        '''CREATE TABLE IF NOT EXISTS config (
+            cong_id INTEGER NOT NULL, key TEXT NOT NULL, value TEXT,
+            PRIMARY KEY (cong_id, key))''',
+        '''CREATE TABLE IF NOT EXISTS config_nacional (key TEXT PRIMARY KEY, value TEXT)''',
+        f'''CREATE TABLE IF NOT EXISTS transacoes (
+            id {PK}, cong_id INTEGER NOT NULL, livro TEXT NOT NULL, tipo TEXT NOT NULL,
+            item TEXT NOT NULL, valor REAL NOT NULL, mes TEXT NOT NULL, ano INTEGER NOT NULL,
+            data_registro TEXT, obs TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''',
+        f'''CREATE TABLE IF NOT EXISTS orcamento (
+            id {PK}, cong_id INTEGER NOT NULL, item TEXT NOT NULL, tipo TEXT NOT NULL,
+            orcam_ano REAL DEFAULT 0, orcam_mes REAL DEFAULT 0, observacao TEXT, ano INTEGER NOT NULL,
+            UNIQUE(cong_id, item, tipo, ano))''',
+        f'''CREATE TABLE IF NOT EXISTS dizimos (
+            id {PK}, cong_id INTEGER NOT NULL, dizimo_bruto REAL NOT NULL,
+            pct_nacional REAL DEFAULT 0, pct_fundo_local REAL DEFAULT 0,
+            valor_nacional REAL, valor_fundo_local REAL, valor_liquido REAL,
+            mes TEXT NOT NULL, ano INTEGER NOT NULL, data_registro TEXT, obs TEXT,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''',
+        '''CREATE TABLE IF NOT EXISTS regras (
+            chave TEXT NOT NULL, valor REAL NOT NULL, vigencia TEXT NOT NULL,
+            criado_por INTEGER, criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            PRIMARY KEY (chave, vigencia))''',
+        f'''CREATE TABLE IF NOT EXISTS compromissos (
+            id {PK}, cong_id INTEGER NOT NULL, ano INTEGER NOT NULL, categoria TEXT NOT NULL,
+            nivelacao INTEGER NOT NULL DEFAULT 0, fundo_local_pct INTEGER NOT NULL DEFAULT 0,
+            betel INTEGER NOT NULL DEFAULT 0, media REAL DEFAULT 0, meses INTEGER DEFAULT 0,
+            salario_minimo REAL DEFAULT 0, observacao TEXT,
+            emitido_por INTEGER, emitido_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            confirmado_por INTEGER, confirmado_em TIMESTAMP,
+            UNIQUE(cong_id, ano))''',
+        f'''CREATE TABLE IF NOT EXISTS fechamentos (
+            id {PK}, cong_id INTEGER NOT NULL, ano INTEGER NOT NULL, mes INTEGER NOT NULL,
+            status TEXT NOT NULL, calculo TEXT NOT NULL, total REAL NOT NULL,
+            fechado_por INTEGER, fechado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            aprovado_por INTEGER, aprovado_em TIMESTAMP,
+            comprovante_valor REAL, comprovante_data TEXT,
+            comprovante_arquivo {BLOB}, comprovante_nome TEXT, comprovante_tipo TEXT,
+            enviado_por INTEGER, enviado_em TIMESTAMP,
+            recebido_por INTEGER, recebido_em TIMESTAMP,
+            UNIQUE(cong_id, ano, mes))''',
+        f'''CREATE TABLE IF NOT EXISTS anexos (
+            id {PK}, transacao_id INTEGER NOT NULL, nome TEXT, tipo TEXT, dados {BLOB},
+            criado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''',
+        f'''CREATE TABLE IF NOT EXISTS auditoria (
+            id {PK}, quando TIMESTAMP DEFAULT CURRENT_TIMESTAMP, usuario_id INTEGER,
+            usuario_nome TEXT, cong_id INTEGER, acao TEXT NOT NULL, detalhe TEXT,
+            antes TEXT, depois TEXT)''',
+        f'''CREATE TABLE IF NOT EXISTS login_falhas (
+            id {PK}, chave TEXT NOT NULL, quando TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''',
+    ]
+    for s in stmts:
+        conn.execute(s)
 
-    # Tabela de congregações (cada uma é um tenant independente)
-    c.execute('''CREATE TABLE IF NOT EXISTS congregacoes (
-        id          INTEGER PRIMARY KEY AUTOINCREMENT,
-        nome        TEXT    NOT NULL,
-        usuario     TEXT    NOT NULL UNIQUE,
-        senha_hash  TEXT    NOT NULL,
-        is_admin    INTEGER DEFAULT 0,
-        ativo       INTEGER DEFAULT 1,
-        criado_em   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )''')
+    # Colunas novas em bancos antigos
+    _add_col(conn, 'transacoes', 'origem', 'TEXT')
+    _add_col(conn, 'transacoes', 'transferencia', 'INTEGER DEFAULT 0')
+    _add_col(conn, 'transacoes', 'forma', 'TEXT')
+    _add_col(conn, 'transacoes', 'usuario_id', 'INTEGER')
+    _add_col(conn, 'dizimos', 'usuario_id', 'INTEGER')
 
-    # Configurações por congregação
-    c.execute('''CREATE TABLE IF NOT EXISTS config (
-        cong_id INTEGER NOT NULL,
-        key     TEXT    NOT NULL,
-        value   TEXT,
-        PRIMARY KEY (cong_id, key),
-        FOREIGN KEY (cong_id) REFERENCES congregacoes(id)
-    )''')
+    # Migração do modelo antigo (login na própria congregação)
+    ccols = _cols(conn, 'congregacoes')
+    if 'usuario' in ccols and not conn.execute('SELECT 1 FROM usuarios').fetchone():
+        for c in conn.execute('SELECT * FROM congregacoes').fetchall():
+            papel = 'admin' if c.get('is_admin') else 'tesoureiro'
+            conn.execute('INSERT INTO usuarios (cong_id, nome, usuario, senha_hash, papel, ativo) VALUES (?,?,?,?,?,?)',
+                         (None if papel == 'admin' else c['id'], c['nome'], c['usuario'],
+                          c['senha_hash'], papel, c['ativo']))
+            if papel == 'admin':
+                conn.execute('UPDATE congregacoes SET ativo=0 WHERE id=?', (c['id'],))
 
-    # Transações
-    c.execute('''CREATE TABLE IF NOT EXISTS transacoes (
-        id            INTEGER PRIMARY KEY AUTOINCREMENT,
-        cong_id       INTEGER NOT NULL,
-        livro         TEXT    NOT NULL,
-        tipo          TEXT    NOT NULL,
-        item          TEXT    NOT NULL,
-        valor         REAL    NOT NULL,
-        mes           TEXT    NOT NULL,
-        ano           INTEGER NOT NULL,
-        data_registro TEXT,
-        obs           TEXT,
-        created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (cong_id) REFERENCES congregacoes(id)
-    )''')
+    # Regras e dados da conta nacional
+    for chave, valor, vig in R.REGRAS_PADRAO:
+        conn.execute('INSERT INTO regras (chave, valor, vigencia) VALUES (?,?,?) ON CONFLICT (chave, vigencia) DO NOTHING',
+                     (chave, valor, vig))
+    for k, v in CONTA_NACIONAL_PADRAO.items():
+        conn.execute('INSERT INTO config_nacional (key, value) VALUES (?,?) ON CONFLICT (key) DO NOTHING', (k, v))
 
-    # Orçamento
-    c.execute('''CREATE TABLE IF NOT EXISTS orcamento (
-        id         INTEGER PRIMARY KEY AUTOINCREMENT,
-        cong_id    INTEGER NOT NULL,
-        item       TEXT    NOT NULL,
-        tipo       TEXT    NOT NULL,
-        orcam_ano  REAL    DEFAULT 0,
-        orcam_mes  REAL    DEFAULT 0,
-        observacao TEXT,
-        ano        INTEGER NOT NULL,
-        UNIQUE(cong_id, item, tipo, ano),
-        FOREIGN KEY (cong_id) REFERENCES congregacoes(id)
-    )''')
-
-    # Dízimos
-    c.execute('''CREATE TABLE IF NOT EXISTS dizimos (
-        id                INTEGER PRIMARY KEY AUTOINCREMENT,
-        cong_id           INTEGER NOT NULL,
-        dizimo_bruto      REAL    NOT NULL,
-        pct_nacional      REAL    DEFAULT 0.15,
-        pct_fundo_local   REAL    DEFAULT 0.03,
-        valor_nacional    REAL,
-        valor_fundo_local REAL,
-        valor_liquido     REAL,
-        mes               TEXT    NOT NULL,
-        ano               INTEGER NOT NULL,
-        data_registro     TEXT,
-        obs               TEXT,
-        created_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (cong_id) REFERENCES congregacoes(id)
-    )''')
-
-    # Criar admin padrão se não existir
-    admin = c.execute("SELECT id FROM congregacoes WHERE usuario='admin'").fetchone()
-    if not admin:
-        c.execute('''INSERT INTO congregacoes (nome, usuario, senha_hash, is_admin)
-                     VALUES (?,?,?,1)''',
-                  ('Administrador INJ', 'admin', hash_senha('admin123')))
-        admin_id = c.lastrowid
-        # Config padrão do admin
-        for k, v in _config_defaults().items():
-            c.execute('INSERT OR IGNORE INTO config (cong_id, key, value) VALUES (?,?,?)',
-                      (admin_id, k, v))
-
+    # Primeiro administrador: só por variável de ambiente (nunca senha fixa no código)
+    adm_user = os.environ.get('ADMIN_USUARIO', 'admin').strip().lower()
+    adm_pass = os.environ.get('ADMIN_SENHA', '')
+    tem_admin = conn.execute("SELECT 1 FROM usuarios WHERE papel='admin' AND ativo=1").fetchone()
+    if not tem_admin and len(adm_pass) >= 8:
+        conn.execute("INSERT INTO usuarios (cong_id, nome, usuario, senha_hash, papel) VALUES (NULL,?,?,?,'admin') "
+                     "ON CONFLICT (usuario) DO NOTHING",
+                     ('Tesouraria Nacional', adm_user, generate_password_hash(adm_pass)))
     conn.commit()
     conn.close()
 
-def _config_defaults(nome_cong=''):
-    return {
-        'nome_congregacao':   nome_cong or 'Igreja do Nome de Jesus',
-        'nome_pastor':        '',
-        'nome_tesoureiro':    '',
-        'nome_auxiliar':      '',
-        'ano_atual':          str(datetime.now().year),
-        'saldo_ano_anterior': '0',
-        'pct_nacional':       '0.15',
-        'pct_fundo_local':    '0.03',
-    }
 
-# ── Helpers de sessão ────────────────────────
+CONTA_NACIONAL_PADRAO = {
+    'cnpj': '60.901.725/0001-82',
+    'banco': 'Caixa Econômica Federal',
+    'agencia': '4717',
+    'operacao': '1388',
+    'conta': '000739087232-3 (poupança)',
+    'pix': '60901725000182 (CNPJ)',
+    'favorecido': 'Igreja do Nome de Jesus',
+    'endereco_sede': 'R. Trevo do Mato, 199 - Parque Guarani - São Paulo/SP, 08235-740',
+    'inicio_uso': '2026-11',
+}
+
+
+def config_nacional():
+    with get_db() as conn:
+        return {r['key']: r['value'] for r in conn.execute('SELECT key, value FROM config_nacional').fetchall()}
+
+
+def regras_em(conn, quando=None):
+    """Valor de cada regra vigente na data (texto AAAA-MM-DD)."""
+    quando = quando or date.today().isoformat()
+    out = {}
+    for r in conn.execute('SELECT chave, valor, vigencia FROM regras WHERE vigencia <= ? ORDER BY vigencia',
+                          (quando,)).fetchall():
+        out[r['chave']] = float(r['valor'])
+    return out
+
+
+# ═════════════════════════════════════════════
+#  SEGURANÇA
+# ═════════════════════════════════════════════
+def verificar_senha(stored, senha):
+    if stored.startswith(('pbkdf2:', 'scrypt:')):
+        return check_password_hash(stored, senha)
+    # Formato antigo (SHA-256 sem sal): aceito uma vez e substituído no login
+    legado = hashlib.sha256(senha.encode('utf-8')).hexdigest()
+    return hmac.compare_digest(stored, legado)
+
+
+def csrf_token():
+    if '_csrf' not in session:
+        session['_csrf'] = secrets.token_urlsafe(32)
+    return session['_csrf']
+
+
+app.jinja_env.globals['csrf_token'] = csrf_token
+
+
+@app.before_request
+def protecao_csrf():
+    if request.method == 'POST' and not app.config.get('TESTING_SEM_CSRF'):
+        token = request.form.get('csrf_token') or request.headers.get('X-CSRF-Token')
+        if not token or not hmac.compare_digest(token, session.get('_csrf', '')):
+            flash('A página expirou. Tente de novo.', 'warning')
+            return redirect(request.referrer or url_for('login'))
+
+
+def auditar(conn, acao, detalhe='', antes=None, depois=None, cong_id=None):
+    conn.execute('INSERT INTO auditoria (usuario_id, usuario_nome, cong_id, acao, detalhe, antes, depois) '
+                 'VALUES (?,?,?,?,?,?,?)',
+                 (session.get('user_id'), session.get('user_nome'),
+                  cong_id if cong_id is not None else session.get('cong_id'), acao, detalhe,
+                  json.dumps(antes, default=str, ensure_ascii=False) if antes is not None else None,
+                  json.dumps(depois, default=str, ensure_ascii=False) if depois is not None else None))
+
+
+def login_required(f):
+    @wraps(f)
+    def wrapper(*a, **kw):
+        if not session.get('user_id'):
+            return redirect(url_for('login', next=request.path))
+        return f(*a, **kw)
+    return wrapper
+
+
+def papel_required(*papeis):
+    def deco(f):
+        @wraps(f)
+        def wrapper(*a, **kw):
+            if not session.get('user_id'):
+                return redirect(url_for('login', next=request.path))
+            if session.get('papel') not in papeis:
+                flash('Você não tem permissão para esta página.', 'danger')
+                return redirect(url_for('inicio'))
+            return f(*a, **kw)
+        return wrapper
+    return deco
+
+
+def cong_required(f):
+    """Páginas da tesouraria local: exigem usuário ligado a uma congregação."""
+    @wraps(f)
+    def wrapper(*a, **kw):
+        if not session.get('user_id'):
+            return redirect(url_for('login', next=request.path))
+        if not session.get('cong_id'):
+            return redirect(url_for('nacional_envios'))
+        return f(*a, **kw)
+    return wrapper
+
+
+def pode_editar():
+    return session.get('papel') == 'tesoureiro'
+
+
 def get_cong_id():
     return session.get('cong_id')
 
-def login_required(f):
-    from functools import wraps
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not session.get('cong_id'):
-            return redirect(url_for('login', next=request.path))
-        return f(*args, **kwargs)
-    return decorated
-
-def admin_required(f):
-    from functools import wraps
-    @wraps(f)
-    def decorated(*args, **kwargs):
-        if not session.get('is_admin'):
-            flash('Acesso restrito ao administrador.', 'danger')
-            return redirect(url_for('dashboard'))
-        return f(*args, **kwargs)
-    return decorated
 
 def get_cfg():
-    """Retorna config da congregação logada."""
     cid = get_cong_id()
     if not cid:
-        return {}
-    conn = get_db()
-    rows = conn.execute('SELECT key, value FROM config WHERE cong_id=?', (cid,)).fetchall()
-    conn.close()
+        return {'nome_congregacao': 'Tesouraria Nacional', 'ano_atual': str(datetime.now().year)}
+    with get_db() as conn:
+        rows = conn.execute('SELECT key, value FROM config WHERE cong_id=?', (cid,)).fetchall()
     return {r['key']: r['value'] for r in rows}
 
-def save_cfg(data: dict):
-    cid = get_cong_id()
-    conn = get_db()
-    for k, v in data.items():
-        conn.execute('INSERT OR REPLACE INTO config (cong_id, key, value) VALUES (?,?,?)', (cid, k, v))
-    conn.commit()
-    conn.close()
 
-# ─────────────────────────────────────────────
+def _config_defaults(nome_cong=''):
+    return {
+        'nome_congregacao': nome_cong or 'Igreja do Nome de Jesus',
+        'nome_pastor': '', 'nome_tesoureiro': '', 'nome_auxiliar': '', 'endereco': '',
+        'ano_atual': str(datetime.now().year), 'saldo_ano_anterior': '0',
+    }
+
+
+def mes_travado(conn, cid, ano, mes_nome):
+    if mes_nome not in MESES:
+        return None
+    return conn.execute('SELECT status FROM fechamentos WHERE cong_id=? AND ano=? AND mes=?',
+                        (cid, int(ano), R.mes_num(mes_nome))).fetchone()
+
+
+def parse_valor(txt):
+    txt = (txt or '').strip().replace('R$', '').replace(' ', '')
+    if ',' in txt:
+        txt = txt.replace('.', '').replace(',', '.')
+    v = float(txt)
+    if v < 0 or v > 10_000_000:
+        raise ValueError('valor fora do limite')
+    return round(v, 2)
+
+
+MES_ORDEM = 'CASE mes ' + ' '.join(f"WHEN '{m}' THEN {i + 1}" for i, m in enumerate(MESES)) + ' ELSE 13 END'
+
+
+# ═════════════════════════════════════════════
 #  FILTROS JINJA
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
 def fmt_brl(value):
     try:
-        return f"R$ {float(value):,.2f}".replace(',','X').replace('.',',').replace('X','.')
+        return f"R$ {float(value):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     except Exception:
         return "R$ 0,00"
 
-app.jinja_env.filters['brl'] = fmt_brl
-app.jinja_env.globals['now'] = datetime.now
 
-# ─────────────────────────────────────────────
-#  AUTH — LOGIN / LOGOUT
-# ─────────────────────────────────────────────
+def fmt_data(v):
+    if not v:
+        return '—'
+    if isinstance(v, (datetime, date)):
+        return v.strftime('%d/%m/%Y')
+    s = str(v)
+    try:
+        return datetime.fromisoformat(s[:19]).strftime('%d/%m/%Y')
+    except ValueError:
+        return s[:10]
+
+
+app.jinja_env.filters['brl'] = fmt_brl
+app.jinja_env.filters['data'] = fmt_data
+app.jinja_env.globals['now'] = datetime.now
+app.jinja_env.globals['enumerate'] = enumerate
+app.jinja_env.globals['MESES'] = MESES
+app.jinja_env.globals['CATEGORIAS_CONG'] = R.CATEGORIAS
+app.jinja_env.globals['STATUS_FECH'] = STATUS_FECH
+app.jinja_env.globals['PAPEIS'] = PAPEIS
+
+
+@app.context_processor
+def ctx():
+    return {'papel': session.get('papel'), 'pode_editar': pode_editar()}
+
+
+# ═════════════════════════════════════════════
+#  LOGIN / LOGOUT
+# ═════════════════════════════════════════════
+def _agora_utc():
+    return datetime.now(timezone.utc).replace(tzinfo=None)
+
+
+def _bloqueado(conn, chave):
+    limite = (_agora_utc() - timedelta(minutes=15)).strftime('%Y-%m-%d %H:%M:%S')
+    n = conn.execute('SELECT COUNT(*) AS n FROM login_falhas WHERE chave=? AND quando > ?',
+                     (chave, limite)).fetchone()['n']
+    return n >= 5
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    if session.get('cong_id'):
-        return redirect(url_for('dashboard'))
-
+    if session.get('user_id'):
+        return redirect(url_for('inicio'))
+    with get_db() as conn:
+        sem_admin = not conn.execute("SELECT 1 FROM usuarios WHERE papel='admin' AND ativo=1").fetchone()
     if request.method == 'POST':
-        usuario = request.form['usuario'].strip()
-        senha   = request.form['senha']
-        conn    = get_db()
-        cong = conn.execute(
-            'SELECT * FROM congregacoes WHERE usuario=? AND ativo=1', (usuario,)
-        ).fetchone()
-        conn.close()
-
-        if cong and cong['senha_hash'] == hash_senha(senha):
-            session.clear()
-            session['cong_id']    = cong['id']
-            session['cong_nome']  = cong['nome']
-            session['usuario']    = cong['usuario']
-            session['is_admin']   = bool(cong['is_admin'])
-            next_url = request.args.get('next') or url_for('dashboard')
-            return redirect(next_url)
+        usuario = request.form.get('usuario', '').strip().lower()
+        senha = request.form.get('senha', '')
+        chave = f"{usuario}|{request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0]}"
+        with get_db() as conn:
+            if _bloqueado(conn, chave):
+                flash('Muitas tentativas. Aguarde 15 minutos e tente de novo.', 'danger')
+                return render_template('login.html', sem_admin=sem_admin)
+            u = conn.execute('SELECT * FROM usuarios WHERE usuario=? AND ativo=1', (usuario,)).fetchone()
+            cong = None
+            if u and u['cong_id']:
+                cong = conn.execute('SELECT * FROM congregacoes WHERE id=?', (u['cong_id'],)).fetchone()
+            if u and verificar_senha(u['senha_hash'], senha) and (not u['cong_id'] or (cong and cong['ativo'])):
+                if not u['senha_hash'].startswith(('pbkdf2:', 'scrypt:')):
+                    conn.execute('UPDATE usuarios SET senha_hash=? WHERE id=?', (generate_password_hash(senha), u['id']))
+                conn.execute('DELETE FROM login_falhas WHERE chave=?', (chave,))
+                session.clear()
+                session.permanent = True
+                session.update(user_id=u['id'], user_nome=u['nome'], usuario=u['usuario'], papel=u['papel'],
+                               cong_id=u['cong_id'], cong_nome=cong['nome'] if cong else 'Tesouraria Nacional',
+                               is_admin=u['papel'] == 'admin')
+                nxt = request.args.get('next', '')
+                if not nxt.startswith('/') or nxt.startswith('//'):
+                    nxt = url_for('inicio')
+                return redirect(nxt)
+            conn.execute('INSERT INTO login_falhas (chave, quando) VALUES (?,?)',
+                         (chave, _agora_utc().strftime('%Y-%m-%d %H:%M:%S')))
         flash('Usuário ou senha incorretos.', 'danger')
+    return render_template('login.html', sem_admin=sem_admin)
 
-    return render_template('login.html')
 
 @app.route('/logout')
 def logout():
@@ -312,530 +467,1103 @@ def logout():
     flash('Sessão encerrada.', 'info')
     return redirect(url_for('login'))
 
-# ─────────────────────────────────────────────
-#  ADMIN — GERENCIAR CONGREGAÇÕES
-# ─────────────────────────────────────────────
-@app.route('/admin')
+
+@app.route('/inicio')
 @login_required
-@admin_required
-def admin():
-    conn = get_db()
-    congs = conn.execute('SELECT * FROM congregacoes ORDER BY nome').fetchall()
-    conn.close()
-    return render_template('admin.html', congs=congs, cfg=get_cfg())
+def inicio():
+    if session.get('cong_id'):
+        return redirect(url_for('dashboard'))
+    return redirect(url_for('nacional_envios'))
 
-@app.route('/admin/nova', methods=['GET', 'POST'])
-@login_required
-@admin_required
-def admin_nova_cong():
-    if request.method == 'POST':
-        nome    = request.form['nome'].strip()
-        usuario = request.form['usuario'].strip().lower()
-        senha   = request.form['senha']
-        conn    = get_db()
-        try:
-            c = conn.cursor()
-            c.execute('INSERT INTO congregacoes (nome, usuario, senha_hash) VALUES (?,?,?)',
-                      (nome, usuario, hash_senha(senha)))
-            cid = c.lastrowid
-            for k, v in _config_defaults(nome).items():
-                c.execute('INSERT OR IGNORE INTO config (cong_id, key, value) VALUES (?,?,?)',
-                          (cid, k, v))
-            conn.commit()
-            flash(f'Congregação "{nome}" criada! Usuário: {usuario}', 'success')
-        except sqlite3.IntegrityError:
-            flash(f'Usuário "{usuario}" já existe. Escolha outro.', 'danger')
-        finally:
-            conn.close()
-        return redirect(url_for('admin'))
 
-    return render_template('admin_nova.html', cfg=get_cfg())
-
-@app.route('/admin/<int:cid>/senha', methods=['POST'])
-@login_required
-@admin_required
-def admin_reset_senha(cid):
-    nova = request.form['nova_senha']
-    conn = get_db()
-    conn.execute('UPDATE congregacoes SET senha_hash=? WHERE id=?', (hash_senha(nova), cid))
-    conn.commit()
-    conn.close()
-    flash('Senha atualizada!', 'success')
-    return redirect(url_for('admin'))
-
-@app.route('/admin/<int:cid>/toggle', methods=['POST'])
-@login_required
-@admin_required
-def admin_toggle_cong(cid):
-    conn = get_db()
-    conn.execute('UPDATE congregacoes SET ativo = 1 - ativo WHERE id=?', (cid,))
-    conn.commit()
-    conn.close()
-    flash('Status atualizado!', 'success')
-    return redirect(url_for('admin'))
-
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
 #  DASHBOARD
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
 @app.route('/')
-@login_required
+@cong_required
 def dashboard():
     cfg = get_cfg()
     cid = get_cong_id()
     ano = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
-    conn = get_db()
-
-    totais = conn.execute('''
-        SELECT tipo, COALESCE(SUM(valor),0) as total
-        FROM transacoes WHERE cong_id=? AND ano=? GROUP BY tipo
-    ''', (cid, ano)).fetchall()
-    total_e  = sum(r['total'] for r in totais if r['tipo'] == 'Entrada')
-    total_s  = sum(r['total'] for r in totais if r['tipo'] == 'Saída')
-    saldo_ant = float(cfg.get('saldo_ano_anterior', 0))
-    saldo    = saldo_ant + total_e - total_s
-
-    por_livro = conn.execute('''
-        SELECT livro,
-               SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END) as entradas,
-               SUM(CASE WHEN tipo='Saída'   THEN valor ELSE 0 END) as saidas
-        FROM transacoes WHERE cong_id=? AND ano=? GROUP BY livro
-    ''', (cid, ano)).fetchall()
-
-    fluxo_mensal = []
-    for mes in MESES:
-        row = conn.execute('''
-            SELECT SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END) as e,
-                   SUM(CASE WHEN tipo='Saída'   THEN valor ELSE 0 END) as s
-            FROM transacoes WHERE cong_id=? AND ano=? AND mes=?
-        ''', (cid, ano, mes)).fetchone()
-        fluxo_mensal.append({'mes': mes[:3].capitalize(), 'e': round(row['e'] or 0, 2), 's': round(row['s'] or 0, 2)})
-
-    top_saidas = conn.execute('''
-        SELECT item, SUM(valor) as total FROM transacoes
-        WHERE cong_id=? AND ano=? AND tipo='Saída'
-        GROUP BY item ORDER BY total DESC LIMIT 7
-    ''', (cid, ano)).fetchall()
-
-    recentes = conn.execute('''
-        SELECT * FROM transacoes WHERE cong_id=? AND ano=? ORDER BY id DESC LIMIT 10
-    ''', (cid, ano)).fetchall()
-
-    conn.close()
+    with get_db() as conn:
+        base = 'FROM transacoes WHERE cong_id=? AND ano=? AND COALESCE(transferencia,0)=0'
+        totais = conn.execute(f'SELECT tipo, COALESCE(SUM(valor),0) AS total {base} GROUP BY tipo', (cid, ano)).fetchall()
+        total_e = sum(r['total'] for r in totais if r['tipo'] == 'Entrada')
+        total_s = sum(r['total'] for r in totais if r['tipo'] == 'Saída')
+        saldo_ant = float(cfg.get('saldo_ano_anterior', 0) or 0)
+        saldo = saldo_ant + total_e - total_s
+        por_livro = conn.execute(f'''SELECT livro,
+                SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END) AS entradas,
+                SUM(CASE WHEN tipo='Saída' THEN valor ELSE 0 END) AS saidas
+                {base} GROUP BY livro''', (cid, ano)).fetchall()
+        fluxo_mensal = []
+        for mes in MESES:
+            row = conn.execute(f'''SELECT SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END) AS e,
+                   SUM(CASE WHEN tipo='Saída' THEN valor ELSE 0 END) AS s {base} AND mes=?''', (cid, ano, mes)).fetchone()
+            fluxo_mensal.append({'mes': mes[:3].capitalize(), 'e': round(row['e'] or 0, 2), 's': round(row['s'] or 0, 2)})
+        top_saidas = conn.execute(f'''SELECT item, SUM(valor) AS total {base} AND tipo='Saída'
+                GROUP BY item ORDER BY total DESC LIMIT 7''', (cid, ano)).fetchall()
+        recentes = conn.execute('SELECT * FROM transacoes WHERE cong_id=? AND ano=? ORDER BY id DESC LIMIT 10',
+                                (cid, ano)).fetchall()
+        pend = conn.execute('SELECT mes, status FROM fechamentos WHERE cong_id=? AND ano=?', (cid, ano)).fetchall()
     return render_template('dashboard.html',
-        cfg=cfg, ano=ano, anos=ANOS,
-        total_e=total_e, total_s=total_s, saldo=saldo, saldo_ant=saldo_ant,
-        por_livro=por_livro,
-        fluxo_mensal=json.dumps(fluxo_mensal),
-        top_saidas=json.dumps([{'item': r['item'], 'total': round(r['total'],2)} for r in top_saidas]),
-        recentes=recentes, livros_labels=LIVROS_LABELS,
-    )
+        cfg=cfg, ano=ano, anos=ANOS, total_e=total_e, total_s=total_s, saldo=saldo, saldo_ant=saldo_ant,
+        por_livro=por_livro, fluxo_mensal=json.dumps(fluxo_mensal),
+        top_saidas=json.dumps([{'item': r['item'], 'total': round(r['total'], 2)} for r in top_saidas]),
+        recentes=recentes, livros_labels=LIVROS_LABELS, fechamentos={p['mes']: p['status'] for p in pend})
 
-# ─────────────────────────────────────────────
+
+# ═════════════════════════════════════════════
 #  LANÇAMENTOS
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
+def _comprimir_imagem(dados):
+    """Reduz fotos de comprovante para cerca de 150-300 KB (banco gratuito tem 1 GB)."""
+    from PIL import Image, ImageOps
+    im = Image.open(io.BytesIO(dados))
+    im = ImageOps.exif_transpose(im).convert('RGB')
+    im.thumbnail((1600, 1600))
+    out = io.BytesIO()
+    im.save(out, 'JPEG', quality=70, optimize=True)
+    return out.getvalue()
+
+
+def _ler_anexo(campo):
+    f = request.files.get(campo)
+    if not f or not f.filename:
+        return None
+    dados = f.read()
+    tipo = f.mimetype or 'application/octet-stream'
+    if tipo not in TIPOS_ANEXO:
+        raise ValueError('Envie o comprovante em PDF, JPG ou PNG.')
+    nome = os.path.basename(f.filename)[:120]
+    if tipo.startswith('image/'):
+        try:
+            dados = _comprimir_imagem(dados)
+        except Exception:
+            raise ValueError('Não foi possível ler a imagem. Envie em JPG, PNG ou PDF.')
+        tipo = 'image/jpeg'
+        nome = os.path.splitext(nome)[0] + '.jpg'
+    elif len(dados) > MAX_PDF:
+        raise ValueError('O PDF passa de 2 MB. Envie uma foto do comprovante ou um PDF menor.')
+    return {'nome': nome, 'tipo': tipo, 'dados': dados}
+
+
 @app.route('/lancamentos', methods=['GET', 'POST'])
-@login_required
+@cong_required
 def lancamentos():
-    cfg     = get_cfg()
-    cid     = get_cong_id()
+    cfg = get_cfg()
+    cid = get_cong_id()
     ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
     mes_sel = request.args.get('mes', '')
 
     if request.method == 'POST':
-        livro = request.form['livro']
-        tipo  = request.form['tipo']
-        item  = request.form['item']
-        valor = request.form['valor'].replace(',', '.')
-        mes   = request.form['mes']
-        ano   = request.form['ano']
-        data  = request.form.get('data_registro', datetime.now().strftime('%d/%m/%Y'))
-        obs   = request.form.get('obs', '')
-        conn  = get_db()
-        conn.execute('''INSERT INTO transacoes (cong_id,livro,tipo,item,valor,mes,ano,data_registro,obs)
-                        VALUES (?,?,?,?,?,?,?,?,?)''',
-                     (cid, livro, tipo, item, float(valor), mes, int(ano), data, obs))
-        conn.commit(); conn.close()
-        flash(f'Lançamento de {fmt_brl(valor)} registrado!', 'success')
+        if not pode_editar():
+            abort(403)
+        try:
+            livro, tipo, item = request.form['livro'], request.form['tipo'], request.form['item']
+            if livro not in CATEGORIAS or tipo not in ('Entrada', 'Saída') or item not in CATEGORIAS[livro][tipo]:
+                raise ValueError('Escolha o livro, o tipo e o item da lista.')
+            valor = parse_valor(request.form['valor'])
+            mes, ano = request.form['mes'], int(request.form['ano'])
+            if mes not in MESES:
+                raise ValueError('Mês inválido.')
+            anexo = _ler_anexo('anexo')
+        except (ValueError, KeyError) as e:
+            flash(str(e) if str(e) else 'Confira os campos do lançamento.', 'danger')
+            return redirect(url_for('lancamentos', ano=ano_sel, mes=mes_sel))
+        with get_db() as conn:
+            if mes_travado(conn, cid, ano, mes):
+                flash(f'{mes.capitalize()}/{ano} já foi fechado. Peça ao pastor para reabrir o mês.', 'danger')
+                return redirect(url_for('lancamentos', ano=ano, mes=mes))
+            tid = conn.insert('''INSERT INTO transacoes (cong_id,livro,tipo,item,valor,mes,ano,data_registro,obs,forma,usuario_id)
+                                 VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
+                              (cid, livro, tipo, item, valor, mes, ano,
+                               request.form.get('data_registro', datetime.now().strftime('%d/%m/%Y')),
+                               request.form.get('obs', '')[:300], request.form.get('forma') if request.form.get('forma') in FORMAS else None,
+                               session['user_id']))
+            if anexo:
+                conn.execute('INSERT INTO anexos (transacao_id, nome, tipo, dados) VALUES (?,?,?,?)',
+                             (tid, anexo['nome'], anexo['tipo'], anexo['dados']))
+        msg = f'Lançamento de {fmt_brl(valor)} registrado.'
+        if tipo == 'Saída' and not anexo:
+            msg += ' Falta anexar o comprovante da despesa (§ 95).'
+            flash(msg, 'warning')
+        else:
+            flash(msg, 'success')
         return redirect(url_for('lancamentos', ano=ano, mes=mes))
 
-    conn = get_db()
-    q = 'SELECT * FROM transacoes WHERE cong_id=? AND ano=?'
-    p = [cid, ano_sel]
-    if mes_sel:
-        q += ' AND mes=?'; p.append(mes_sel)
-    q += ' ORDER BY id DESC'
-    lista = conn.execute(q, p).fetchall()
-    total_e = sum(t['valor'] for t in lista if t['tipo'] == 'Entrada')
-    total_s = sum(t['valor'] for t in lista if t['tipo'] == 'Saída')
-    conn.close()
-
+    with get_db() as conn:
+        q = '''SELECT t.*, (SELECT COUNT(*) FROM anexos a WHERE a.transacao_id=t.id) AS n_anexos
+               FROM transacoes t WHERE t.cong_id=? AND t.ano=?'''
+        p = [cid, ano_sel]
+        if mes_sel:
+            q += ' AND t.mes=?'
+            p.append(mes_sel)
+        q += ' ORDER BY t.id DESC'
+        lista = conn.execute(q, p).fetchall()
+        travados = {MESES[f['mes'] - 1] for f in
+                    conn.execute('SELECT mes FROM fechamentos WHERE cong_id=? AND ano=?', (cid, ano_sel)).fetchall()}
+    vis = [t for t in lista if not t.get('transferencia')]
+    total_e = sum(t['valor'] for t in vis if t['tipo'] == 'Entrada')
+    total_s = sum(t['valor'] for t in vis if t['tipo'] == 'Saída')
     return render_template('lancamentos.html',
-        cfg=cfg, categorias=CATEGORIAS, meses=MESES, anos=ANOS, livros=LIVROS,
-        livros_labels=LIVROS_LABELS, transacoes=lista,
-        ano_sel=ano_sel, mes_sel=mes_sel, total_e=total_e, total_s=total_s,
-    )
+        cfg=cfg, categorias=CATEGORIAS, meses=MESES, anos=ANOS, livros=LIVROS, formas=FORMAS,
+        livros_labels=LIVROS_LABELS, transacoes=lista, travados=travados,
+        ano_sel=ano_sel, mes_sel=mes_sel, total_e=total_e, total_s=total_s)
+
 
 @app.route('/lancamentos/<int:tid>/editar', methods=['GET', 'POST'])
-@login_required
+@cong_required
 def editar_lancamento(tid):
-    cfg = get_cfg(); cid = get_cong_id()
-    conn = get_db()
-    t = conn.execute('SELECT * FROM transacoes WHERE id=? AND cong_id=?', (tid, cid)).fetchone()
-    if not t:
-        conn.close(); flash('Não encontrado.', 'danger')
-        return redirect(url_for('lancamentos'))
+    cfg = get_cfg()
+    cid = get_cong_id()
+    with get_db() as conn:
+        t = conn.execute('SELECT * FROM transacoes WHERE id=? AND cong_id=?', (tid, cid)).fetchone()
+        if not t or t.get('origem'):
+            flash('Este lançamento não pode ser editado aqui.', 'danger')
+            return redirect(url_for('lancamentos'))
+        if request.method == 'POST':
+            if not pode_editar():
+                abort(403)
+            try:
+                livro, tipo, item = request.form['livro'], request.form['tipo'], request.form['item']
+                if livro not in CATEGORIAS or tipo not in ('Entrada', 'Saída') or item not in CATEGORIAS[livro][tipo]:
+                    raise ValueError('Escolha o livro, o tipo e o item da lista.')
+                valor = parse_valor(request.form['valor'])
+                mes, ano = request.form['mes'], int(request.form['ano'])
+                if mes not in MESES:
+                    raise ValueError('Mês inválido.')
+            except (ValueError, KeyError) as e:
+                flash(str(e) or 'Confira os campos.', 'danger')
+                return redirect(url_for('editar_lancamento', tid=tid))
+            if mes_travado(conn, cid, t['ano'], t['mes']) or mes_travado(conn, cid, ano, mes):
+                flash('O mês está fechado. Peça ao pastor para reabrir antes de corrigir.', 'danger')
+                return redirect(url_for('lancamentos', ano=t['ano']))
+            novo = dict(livro=livro, tipo=tipo, item=item, valor=valor, mes=mes, ano=ano,
+                        data_registro=request.form.get('data_registro', ''), obs=request.form.get('obs', '')[:300])
+            conn.execute('''UPDATE transacoes SET livro=?,tipo=?,item=?,valor=?,mes=?,ano=?,data_registro=?,obs=?
+                            WHERE id=? AND cong_id=?''', (*novo.values(), tid, cid))
+            auditar(conn, 'lancamento.editar', f'Lançamento #{tid}', antes=dict(t), depois=novo)
+            flash('Lançamento atualizado. A alteração ficou registrada no histórico.', 'success')
+            return redirect(url_for('lancamentos', ano=ano))
+    return render_template('editar_lancamento.html', cfg=cfg, t=t, categorias=CATEGORIAS, meses=MESES,
+                           anos=ANOS, livros=LIVROS, livros_labels=LIVROS_LABELS)
 
-    if request.method == 'POST':
-        conn.execute('''UPDATE transacoes SET livro=?,tipo=?,item=?,valor=?,mes=?,ano=?,data_registro=?,obs=?
-                        WHERE id=? AND cong_id=?''',
-                     (request.form['livro'], request.form['tipo'], request.form['item'],
-                      float(request.form['valor'].replace(',','.')),
-                      request.form['mes'], int(request.form['ano']),
-                      request.form.get('data_registro',''), request.form.get('obs',''),
-                      tid, cid))
-        conn.commit(); conn.close()
-        flash('Lançamento atualizado!', 'success')
-        return redirect(url_for('lancamentos', ano=request.form['ano']))
-    conn.close()
-    return render_template('editar_lancamento.html',
-        cfg=cfg, t=t, categorias=CATEGORIAS, meses=MESES, anos=ANOS,
-        livros=LIVROS, livros_labels=LIVROS_LABELS)
 
 @app.route('/lancamentos/<int:tid>/deletar', methods=['POST'])
-@login_required
+@papel_required('tesoureiro')
 def deletar_lancamento(tid):
-    cid = get_cong_id(); conn = get_db()
-    t = conn.execute('SELECT ano FROM transacoes WHERE id=? AND cong_id=?', (tid, cid)).fetchone()
-    ano = t['ano'] if t else datetime.now().year
-    conn.execute('DELETE FROM transacoes WHERE id=? AND cong_id=?', (tid, cid))
-    conn.commit(); conn.close()
-    flash('Lançamento excluído.', 'warning')
-    return redirect(url_for('lancamentos', ano=ano))
+    cid = get_cong_id()
+    with get_db() as conn:
+        t = conn.execute('SELECT * FROM transacoes WHERE id=? AND cong_id=?', (tid, cid)).fetchone()
+        if not t:
+            abort(404)
+        if t.get('origem'):
+            flash('Lançamentos gerados pelo fechamento só saem reabrindo o mês.', 'danger')
+        elif mes_travado(conn, cid, t['ano'], t['mes']):
+            flash('O mês está fechado. Peça ao pastor para reabrir antes de excluir.', 'danger')
+        else:
+            conn.execute('DELETE FROM anexos WHERE transacao_id=?', (tid,))
+            conn.execute('DELETE FROM transacoes WHERE id=? AND cong_id=?', (tid, cid))
+            auditar(conn, 'lancamento.excluir', f'Lançamento #{tid}', antes=dict(t))
+            flash('Lançamento excluído. A exclusão ficou registrada no histórico.', 'warning')
+    return redirect(url_for('lancamentos', ano=t['ano']))
 
-# ─────────────────────────────────────────────
+
+@app.route('/lancamentos/<int:tid>/anexo', methods=['GET', 'POST'])
+@cong_required
+def anexo_lancamento(tid):
+    cid = get_cong_id()
+    with get_db() as conn:
+        t = conn.execute('SELECT * FROM transacoes WHERE id=? AND cong_id=?', (tid, cid)).fetchone()
+        if not t:
+            abort(404)
+        if request.method == 'POST':
+            if not pode_editar():
+                abort(403)
+            try:
+                anexo = _ler_anexo('anexo')
+                if not anexo:
+                    raise ValueError('Escolha um arquivo.')
+            except ValueError as e:
+                flash(str(e), 'danger')
+                return redirect(url_for('lancamentos', ano=t['ano'], mes=t['mes']))
+            conn.execute('INSERT INTO anexos (transacao_id, nome, tipo, dados) VALUES (?,?,?,?)',
+                         (tid, anexo['nome'], anexo['tipo'], anexo['dados']))
+            flash('Comprovante anexado.', 'success')
+            return redirect(url_for('lancamentos', ano=t['ano'], mes=t['mes']))
+        a = conn.execute('SELECT * FROM anexos WHERE transacao_id=? ORDER BY id DESC', (tid,)).fetchone()
+    if not a:
+        abort(404)
+    return send_file(io.BytesIO(db.blob(a['dados'])), mimetype=a['tipo'], download_name=a['nome'] or 'comprovante')
+
+
+# ═════════════════════════════════════════════
 #  DÍZIMOS
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
+def compromisso_de(conn, cid, ano):
+    c = conn.execute('SELECT * FROM compromissos WHERE cong_id=? AND ano=?', (cid, ano)).fetchone()
+    if not c:
+        return None
+    return {'categoria': c['categoria'], 'nivelacao': bool(c['nivelacao']),
+            'fundo_local_pct': int(c['fundo_local_pct']), 'betel': bool(c['betel']),
+            'confirmado': bool(c['confirmado_em']), 'id': c['id']}
+
+
 @app.route('/dizimos', methods=['GET', 'POST'])
-@login_required
+@cong_required
 def dizimos():
-    cfg     = get_cfg(); cid = get_cong_id()
-    pct_nac = float(cfg.get('pct_nacional', 0.15))
-    pct_fl  = float(cfg.get('pct_fundo_local', 0.03))
-    calculo = None
+    cfg = get_cfg()
+    cid = get_cong_id()
     ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
-
     if request.method == 'POST':
-        bruto    = float(request.form['dizimo_bruto'].replace(',', '.'))
-        pct_nac_f = float(request.form.get('pct_nacional', pct_nac))
-        pct_fl_f  = float(request.form.get('pct_fundo_local', pct_fl))
-        mes  = request.form['mes']; ano = int(request.form['ano'])
-        obs  = request.form.get('obs', '')
-        data = request.form.get('data_registro', datetime.now().strftime('%d/%m/%Y'))
-        v_nac = round(bruto * pct_nac_f, 2)
-        v_fl  = round(bruto * pct_fl_f, 2)
-        v_liq = round(bruto - v_nac - v_fl, 2)
-        conn  = get_db()
-        conn.execute('''INSERT INTO dizimos
-            (cong_id,dizimo_bruto,pct_nacional,pct_fundo_local,valor_nacional,valor_fundo_local,valor_liquido,mes,ano,data_registro,obs)
-            VALUES (?,?,?,?,?,?,?,?,?,?,?)''',
-            (cid, bruto, pct_nac_f, pct_fl_f, v_nac, v_fl, v_liq, mes, ano, data, obs))
-        conn.commit(); conn.close()
-        calculo = {'bruto': bruto, 'pct_nac': pct_nac_f, 'pct_fl': pct_fl_f,
-                   'v_nac': v_nac, 'v_fl': v_fl, 'v_liquido': v_liq, 'mes': mes, 'ano': ano}
-        flash('Dízimo registrado!', 'success')
+        if not pode_editar():
+            abort(403)
+        try:
+            bruto = parse_valor(request.form['dizimo_bruto'])
+            mes, ano = request.form['mes'], int(request.form['ano'])
+            if mes not in MESES or bruto <= 0:
+                raise ValueError
+        except (ValueError, KeyError):
+            flash('Informe o valor e o mês do dízimo.', 'danger')
+            return redirect(url_for('dizimos', ano=ano_sel))
+        with get_db() as conn:
+            if mes_travado(conn, cid, ano, mes):
+                flash(f'{mes.capitalize()}/{ano} já foi fechado. Peça ao pastor para reabrir o mês.', 'danger')
+                return redirect(url_for('dizimos', ano=ano))
+            comp = compromisso_de(conn, cid, ano) or {'categoria': 'nova', 'nivelacao': False, 'fundo_local_pct': 0, 'betel': False}
+            reg = regras_em(conn, f'{ano}-{R.mes_num(mes):02d}-01')
+            liq = R.liquidar_dizimo(bruto, comp, reg)
+            conn.insert('''INSERT INTO dizimos (cong_id,dizimo_bruto,pct_nacional,pct_fundo_local,valor_nacional,
+                           valor_fundo_local,valor_liquido,mes,ano,data_registro,obs,usuario_id)
+                           VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+                        (cid, bruto, reg['pct_dizimo_dizimos'] + (reg['pct_nivelacao'] if comp['nivelacao'] else 0),
+                         comp['fundo_local_pct'] / 100, liq['dd'] + liq['niv'] + liq['betel'], liq['fundo_local'],
+                         liq['liquido'], mes, ano, request.form.get('data_registro', datetime.now().strftime('%d/%m/%Y')),
+                         request.form.get('obs', '')[:300], session['user_id']))
+        flash(f'Dízimo de {fmt_brl(bruto)} registrado em {mes}.', 'success')
+        return redirect(url_for('dizimos', ano=ano))
 
-    conn = get_db()
-    historico = conn.execute('SELECT * FROM dizimos WHERE cong_id=? AND ano=? ORDER BY id DESC', (cid, ano_sel)).fetchall()
-    conn.close()
-    return render_template('dizimos.html',
-        cfg=cfg, meses=MESES, anos=ANOS, calculo=calculo,
-        pct_nac=pct_nac, pct_fl=pct_fl, historico=historico, ano_sel=ano_sel)
+    with get_db() as conn:
+        historico = conn.execute(f'SELECT * FROM dizimos WHERE cong_id=? AND ano=? ORDER BY {MES_ORDEM}, id',
+                                 (cid, ano_sel)).fetchall()
+        comp = compromisso_de(conn, cid, ano_sel)
+        reg = regras_em(conn, f'{ano_sel}-12-31')
+    return render_template('dizimos.html', cfg=cfg, meses=MESES, anos=ANOS, ano_sel=ano_sel,
+                           historico=historico, comp=comp, reg=reg)
+
 
 @app.route('/dizimos/<int:did>/deletar', methods=['POST'])
-@login_required
+@papel_required('tesoureiro')
 def deletar_dizimo(did):
-    cid = get_cong_id(); conn = get_db()
-    conn.execute('DELETE FROM dizimos WHERE id=? AND cong_id=?', (did, cid))
-    conn.commit(); conn.close()
-    flash('Registro excluído.', 'warning')
-    return redirect(url_for('dizimos'))
+    cid = get_cong_id()
+    with get_db() as conn:
+        d = conn.execute('SELECT * FROM dizimos WHERE id=? AND cong_id=?', (did, cid)).fetchone()
+        if not d:
+            abort(404)
+        if mes_travado(conn, cid, d['ano'], d['mes']):
+            flash('O mês está fechado. Peça ao pastor para reabrir antes de excluir.', 'danger')
+        else:
+            conn.execute('DELETE FROM dizimos WHERE id=? AND cong_id=?', (did, cid))
+            auditar(conn, 'dizimo.excluir', f'Dízimo #{did}', antes=dict(d))
+            flash('Registro excluído. A exclusão ficou registrada no histórico.', 'warning')
+    return redirect(url_for('dizimos', ano=d['ano']))
 
-# ─────────────────────────────────────────────
-#  ORÇAMENTO
-# ─────────────────────────────────────────────
-@app.route('/orcamento', methods=['GET', 'POST'])
+
+# ═════════════════════════════════════════════
+#  FECHAMENTO DO MÊS
+# ═════════════════════════════════════════════
+def calcular_mes(conn, cid, ano, mes):
+    nome = MESES[mes - 1]
+    bruto = conn.execute('SELECT COALESCE(SUM(dizimo_bruto),0) AS t FROM dizimos WHERE cong_id=? AND ano=? AND mes=?',
+                         (cid, ano, nome)).fetchone()['t']
+    envios = {r['item']: r['t'] for r in conn.execute(
+        '''SELECT item, SUM(valor) AS t FROM transacoes WHERE cong_id=? AND ano=? AND mes=? AND livro='Envios'
+           AND tipo='Entrada' AND origem IS NULL GROUP BY item''', (cid, ano, nome)).fetchall()}
+    comp = compromisso_de(conn, cid, ano)
+    reg = regras_em(conn, f'{ano}-{mes:02d}-01')
+    if not comp:
+        return None, reg
+    return R.fechar_mes(float(bruto), comp, envios, reg), reg
+
+
+def _lancar_fechamento(conn, cid, f_id, ano, mes, calc):
+    """Gera os lançamentos de saída do mês fechado (envios, fundo local, sustento)."""
+    nome = MESES[mes - 1]
+    origem = f'fechamento:{f_id}'
+    liq = calc['liquidacao']
+    hoje = datetime.now().strftime('%d/%m/%Y')
+    linhas = []
+    if liq['bruto']:
+        linhas.append(('LiqDízimos', 'Entrada', 'Dízimo bruto do mês', liq['bruto'], 0))
+    for chave, rotulo in (('dd', 'Envio Dízimo dos Dízimos 10%'), ('niv', 'Envio Nivelação 5%'), ('betel', 'Envio Betel 4%')):
+        if liq[chave]:
+            linhas.append(('LiqDízimos', 'Saída', rotulo, liq[chave], 0))
+    if liq['fundo_local']:
+        linhas.append(('LiqDízimos', 'Saída', 'Aporte ao fundo local', liq['fundo_local'], 1))
+        linhas.append(('FundoLocal', 'Entrada', 'Aporte da liquidação de dízimos', liq['fundo_local'], 1))
+    if liq['liquido']:
+        linhas.append(('LiqDízimos', 'Saída', 'Sustento pastoral (§ 66)', liq['liquido'], 0))
+    for l in calc['nacional'] + calc['distrital']:
+        if l['chave'] in ('dd', 'nivelacao', 'betel') or not l['valor']:
+            continue
+        linhas.append(('Envios', 'Saída', 'Envio: ' + l['rotulo'], l['valor'], 0))
+    for livro, tipo, item, valor, transf in linhas:
+        conn.execute('''INSERT INTO transacoes (cong_id,livro,tipo,item,valor,mes,ano,data_registro,obs,origem,transferencia,usuario_id)
+                        VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+                     (cid, livro, tipo, item, valor, nome, ano, hoje, 'Gerado pelo fechamento do mês',
+                      origem, transf, session.get('user_id')))
+
+
+@app.route('/fechamento')
+@cong_required
+def fechamento():
+    cfg = get_cfg()
+    cid = get_cong_id()
+    hoje = date.today()
+    ano = int(request.args.get('ano', cfg.get('ano_atual', hoje.year)))
+    padrao_mes = hoje.month - 1 if hoje.month > 1 else 12
+    mes = int(request.args.get('mes', padrao_mes))
+    if not 1 <= mes <= 12:
+        abort(400)
+    with get_db() as conn:
+        f = conn.execute('SELECT * FROM fechamentos WHERE cong_id=? AND ano=? AND mes=?', (cid, ano, mes)).fetchone()
+        if f:
+            calc = json.loads(f['calculo'])
+            reg = regras_em(conn, f'{ano}-{mes:02d}-01')
+        else:
+            calc, reg = calcular_mes(conn, cid, ano, mes)
+        comp = compromisso_de(conn, cid, ano)
+        status_ano = {r['mes']: r['status'] for r in
+                      conn.execute('SELECT mes, status FROM fechamentos WHERE cong_id=? AND ano=?', (cid, ano)).fetchall()}
+    limite = R.prazo_envio(ano, mes, int(reg.get('prazo_dia', 5)))
+    return render_template('fechamento.html', cfg=cfg, ano=ano, mes=mes, anos=ANOS, f=f, calc=calc, comp=comp,
+                           limite=limite, status_ano=status_ano, nacional=config_nacional())
+
+
+@app.route('/fechamento/fechar', methods=['POST'])
+@papel_required('tesoureiro')
+def fechamento_fechar():
+    cid = get_cong_id()
+    ano, mes = int(request.form['ano']), int(request.form['mes'])
+    with get_db() as conn:
+        if conn.execute('SELECT 1 FROM fechamentos WHERE cong_id=? AND ano=? AND mes=?', (cid, ano, mes)).fetchone():
+            flash('Este mês já está fechado.', 'warning')
+            return redirect(url_for('fechamento', ano=ano, mes=mes))
+        calc, _ = calcular_mes(conn, cid, ano, mes)
+        if not calc:
+            flash(f'A carta anual de {ano} ainda não foi emitida pela Tesouraria Nacional. Sem ela não há percentuais para fechar o mês.', 'danger')
+            return redirect(url_for('fechamento', ano=ano, mes=mes))
+        fid = conn.insert('INSERT INTO fechamentos (cong_id, ano, mes, status, calculo, total, fechado_por) VALUES (?,?,?,?,?,?,?)',
+                          (cid, ano, mes, 'fechado', json.dumps(calc, ensure_ascii=False), calc['total'], session['user_id']))
+        auditar(conn, 'fechamento.fechar', f'{MESES[mes - 1]}/{ano}', depois={'total': calc['total']})
+    flash('Mês fechado. Agora o pastor precisa aprovar o relatório.', 'success')
+    return redirect(url_for('fechamento', ano=ano, mes=mes))
+
+
+@app.route('/fechamento/<int:fid>/aprovar', methods=['POST'])
+@papel_required('pastor')
+def fechamento_aprovar(fid):
+    cid = get_cong_id()
+    with get_db() as conn:
+        f = conn.execute('SELECT * FROM fechamentos WHERE id=? AND cong_id=?', (fid, cid)).fetchone()
+        if not f or f['status'] != 'fechado':
+            abort(400)
+        conn.execute("UPDATE fechamentos SET status='aprovado', aprovado_por=?, aprovado_em=CURRENT_TIMESTAMP WHERE id=?",
+                     (session['user_id'], fid))
+        auditar(conn, 'fechamento.aprovar', f"{MESES[f['mes'] - 1]}/{f['ano']}")
+    flash('Relatório aprovado. O tesoureiro já pode depositar e anexar o comprovante.', 'success')
+    return redirect(url_for('fechamento', ano=f['ano'], mes=f['mes']))
+
+
+@app.route('/fechamento/<int:fid>/comprovante', methods=['POST'])
+@papel_required('tesoureiro')
+def fechamento_comprovante(fid):
+    cid = get_cong_id()
+    with get_db() as conn:
+        f = conn.execute('SELECT * FROM fechamentos WHERE id=? AND cong_id=?', (fid, cid)).fetchone()
+        if not f or f['status'] != 'aprovado':
+            abort(400)
+        try:
+            valor = parse_valor(request.form['valor'])
+            data_dep = date.fromisoformat(request.form['data'])
+            anexo = _ler_anexo('arquivo')
+            if not anexo:
+                raise ValueError('Anexe o comprovante do banco.')
+        except (ValueError, KeyError) as e:
+            flash(str(e) or 'Informe o valor, a data e o arquivo do comprovante.', 'danger')
+            return redirect(url_for('fechamento', ano=f['ano'], mes=f['mes']))
+        if abs(valor - f['total']) >= 0.005:
+            flash(f"O comprovante ({fmt_brl(valor)}) não confere com o relatório ({fmt_brl(f['total'])}). "
+                  f"Diferença de {fmt_brl(valor - f['total'])}. Corrija o depósito ou peça ao pastor para reabrir o mês.", 'danger')
+            return redirect(url_for('fechamento', ano=f['ano'], mes=f['mes']))
+        conn.execute('''UPDATE fechamentos SET status='enviado', comprovante_valor=?, comprovante_data=?,
+                        comprovante_arquivo=?, comprovante_nome=?, comprovante_tipo=?, enviado_por=?,
+                        enviado_em=CURRENT_TIMESTAMP WHERE id=?''',
+                     (valor, data_dep.isoformat(), anexo['dados'], anexo['nome'], anexo['tipo'], session['user_id'], fid))
+        _lancar_fechamento(conn, cid, fid, f['ano'], f['mes'], json.loads(f['calculo']))
+        auditar(conn, 'fechamento.comprovante', f"{MESES[f['mes'] - 1]}/{f['ano']}", depois={'valor': valor, 'data': data_dep})
+        reg = regras_em(conn)
+    limite = R.prazo_envio(f['ano'], f['mes'], int(reg.get('prazo_dia', 5)))
+    if data_dep > limite:
+        flash(f'Comprovante confere e o mês está travado. Atenção: o depósito saiu depois do prazo de {limite:%d/%m} (§ 80).', 'warning')
+    else:
+        flash('Comprovante confere. O mês está travado e o envio foi registrado.', 'success')
+    return redirect(url_for('fechamento', ano=f['ano'], mes=f['mes']))
+
+
+@app.route('/fechamento/<int:fid>/reabrir', methods=['POST'])
+@papel_required('pastor')
+def fechamento_reabrir(fid):
+    cid = get_cong_id()
+    motivo = request.form.get('motivo', '').strip()
+    with get_db() as conn:
+        f = conn.execute('SELECT * FROM fechamentos WHERE id=? AND cong_id=?', (fid, cid)).fetchone()
+        if not f:
+            abort(404)
+        if f['status'] == 'recebido':
+            flash('A nacional já confirmou o recebimento deste mês. Para corrigir, fale com a Tesouraria Nacional.', 'danger')
+            return redirect(url_for('fechamento', ano=f['ano'], mes=f['mes']))
+        if len(motivo) < 5:
+            flash('Escreva o motivo da reabertura.', 'danger')
+            return redirect(url_for('fechamento', ano=f['ano'], mes=f['mes']))
+        conn.execute('DELETE FROM transacoes WHERE cong_id=? AND origem=?', (cid, f'fechamento:{fid}'))
+        conn.execute('DELETE FROM fechamentos WHERE id=?', (fid,))
+        antes = {k: v for k, v in f.items() if k != 'comprovante_arquivo'}
+        auditar(conn, 'fechamento.reabrir', f"{MESES[f['mes'] - 1]}/{f['ano']} — motivo: {motivo}", antes=antes)
+    flash('Mês reaberto. O motivo ficou registrado no histórico.', 'warning')
+    return redirect(url_for('fechamento', ano=f['ano'], mes=f['mes']))
+
+
+def _pode_ver_fechamento(f):
+    return session.get('papel') in ('admin', 'supervisor') or f['cong_id'] == session.get('cong_id')
+
+
+@app.route('/fechamento/<int:fid>/relatorio')
 @login_required
-def orcamento():
-    cfg     = get_cfg(); cid = get_cong_id()
-    ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
+def fechamento_relatorio(fid):
+    with get_db() as conn:
+        f = conn.execute('SELECT * FROM fechamentos WHERE id=?', (fid,)).fetchone()
+        if not f or not _pode_ver_fechamento(f):
+            abort(404)
+        cfg = {r['key']: r['value'] for r in conn.execute('SELECT key, value FROM config WHERE cong_id=?', (f['cong_id'],)).fetchall()}
+        cong = conn.execute('SELECT * FROM congregacoes WHERE id=?', (f['cong_id'],)).fetchone()
+    return render_template('relatorio_economico.html', f=f, calc=json.loads(f['calculo']), cfg=cfg, cong=cong,
+                           nacional=config_nacional())
 
+
+@app.route('/fechamento/<int:fid>/comprovante.arquivo')
+@login_required
+def fechamento_arquivo(fid):
+    with get_db() as conn:
+        f = conn.execute('SELECT * FROM fechamentos WHERE id=?', (fid,)).fetchone()
+    if not f or not _pode_ver_fechamento(f) or not f['comprovante_arquivo']:
+        abort(404)
+    return send_file(io.BytesIO(db.blob(f['comprovante_arquivo'])), mimetype=f['comprovante_tipo'],
+                     download_name=f['comprovante_nome'] or 'comprovante')
+
+
+# ═════════════════════════════════════════════
+#  CARTA ANUAL (visão da congregação)
+# ═════════════════════════════════════════════
+def _carta_ctx(conn, cid, ano):
+    c = conn.execute('SELECT * FROM compromissos WHERE cong_id=? AND ano=?', (cid, ano)).fetchone()
+    if not c:
+        return None
+    dados = {'categoria': c['categoria'], 'nivelacao': bool(c['nivelacao']), 'fundo_local_pct': c['fundo_local_pct'],
+             'betel': bool(c['betel']), 'meses': c['meses'], 'media': c['media']}
+    cong = conn.execute('SELECT nome FROM congregacoes WHERE id=?', (cid,)).fetchone()
+    p1, p2 = R.texto_carta(cong['nome'], ano, dados)
+    conf = None
+    if c['confirmado_por']:
+        conf = conn.execute('SELECT nome FROM usuarios WHERE id=?', (c['confirmado_por'],)).fetchone()
+    return {'c': c, 'p1': p1, 'p2': p2, 'lista': R.lista_compromissos(dados), 'cong_nome': cong['nome'],
+            'confirmado_nome': conf['nome'] if conf else None}
+
+
+@app.route('/carta')
+@cong_required
+def carta():
+    cfg = get_cfg()
+    cid = get_cong_id()
+    ano = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
+    with get_db() as conn:
+        ctx_c = _carta_ctx(conn, cid, ano)
+    return render_template('carta.html', cfg=cfg, ano=ano, anos=ANOS, carta=ctx_c, nacional=config_nacional())
+
+
+@app.route('/carta/<int:ano>/confirmar', methods=['POST'])
+@papel_required('pastor')
+def carta_confirmar(ano):
+    cid = get_cong_id()
+    with get_db() as conn:
+        conn.execute('UPDATE compromissos SET confirmado_por=?, confirmado_em=CURRENT_TIMESTAMP WHERE cong_id=? AND ano=?',
+                     (session['user_id'], cid, ano))
+        auditar(conn, 'carta.confirmar', f'Carta anual {ano}')
+    flash(f'Carta de {ano} confirmada.', 'success')
+    return redirect(url_for('carta', ano=ano))
+
+
+# ═════════════════════════════════════════════
+#  ORÇAMENTO
+# ═════════════════════════════════════════════
+@app.route('/orcamento', methods=['GET', 'POST'])
+@cong_required
+def orcamento():
+    cfg = get_cfg()
+    cid = get_cong_id()
+    ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
     if request.method == 'POST':
-        conn = get_db()
-        items     = request.form.getlist('item[]')
-        tipos     = request.form.getlist('tipo[]')
-        anos_f    = request.form.getlist('ano[]')
+        if session.get('papel') not in ('tesoureiro', 'pastor'):
+            abort(403)
+        items = request.form.getlist('item[]')
+        tipos = request.form.getlist('tipo[]')
+        anos_f = request.form.getlist('ano[]')
         orcam_anos = request.form.getlist('orcam_ano[]')
         orcam_meses = request.form.getlist('orcam_mes[]')
-        obs_list  = request.form.getlist('obs[]')
-        for i in range(len(items)):
-            if items[i]:
-                conn.execute('''INSERT INTO orcamento (cong_id,item,tipo,orcam_ano,orcam_mes,observacao,ano)
-                    VALUES (?,?,?,?,?,?,?)
-                    ON CONFLICT(cong_id,item,tipo,ano) DO UPDATE SET
-                        orcam_ano=excluded.orcam_ano, orcam_mes=excluded.orcam_mes, observacao=excluded.observacao''',
-                    (cid, items[i], tipos[i], float(orcam_anos[i] or 0),
-                     float(orcam_meses[i] or 0),
-                     obs_list[i] if i < len(obs_list) else '',
-                     int(anos_f[i]) if i < len(anos_f) else ano_sel))
-        conn.commit(); conn.close()
-        flash('Orçamento salvo!', 'success')
+        obs_list = request.form.getlist('obs[]')
+        with get_db() as conn:
+            for i in range(len(items)):
+                if items[i]:
+                    conn.execute('''INSERT INTO orcamento (cong_id,item,tipo,orcam_ano,orcam_mes,observacao,ano)
+                        VALUES (?,?,?,?,?,?,?)
+                        ON CONFLICT (cong_id,item,tipo,ano) DO UPDATE SET
+                            orcam_ano=excluded.orcam_ano, orcam_mes=excluded.orcam_mes, observacao=excluded.observacao''',
+                                 (cid, items[i], tipos[i], float(orcam_anos[i] or 0), float(orcam_meses[i] or 0),
+                                  obs_list[i] if i < len(obs_list) else '',
+                                  int(anos_f[i]) if i < len(anos_f) else ano_sel))
+        flash('Orçamento salvo.', 'success')
         return redirect(url_for('orcamento', ano=ano_sel))
 
-    conn = get_db()
-    orc_rows = conn.execute('SELECT * FROM orcamento WHERE cong_id=? AND ano=?', (cid, ano_sel)).fetchall()
-    orc_map  = {(r['item'], r['tipo']): r for r in orc_rows}
-
+    with get_db() as conn:
+        orc_rows = conn.execute('SELECT * FROM orcamento WHERE cong_id=? AND ano=?', (cid, ano_sel)).fetchall()
+        orc_map = {(r['item'], r['tipo']): r for r in orc_rows}
+        reais = {(r['item'], r['tipo']): r['t'] for r in conn.execute(
+            '''SELECT item, tipo, SUM(valor) AS t FROM transacoes WHERE cong_id=? AND ano=?
+               AND COALESCE(transferencia,0)=0 GROUP BY item, tipo''', (cid, ano_sel)).fetchall()}
     todos_e = sorted(set(i for l in CATEGORIAS.values() for i in l.get('Entrada', [])))
     todos_s = sorted(set(i for l in CATEGORIAS.values() for i in l.get('Saída', [])))
 
     def comparativo(itens, tipo):
         result = []
         for item in itens:
-            real = conn.execute('''SELECT COALESCE(SUM(valor),0) as t FROM transacoes
-                WHERE cong_id=? AND item=? AND tipo=? AND ano=?''', (cid, item, tipo, ano_sel)).fetchone()['t']
-            orc  = orc_map.get((item, tipo))
+            real = reais.get((item, tipo), 0) or 0
+            orc = orc_map.get((item, tipo))
             orcado = orc['orcam_ano'] if orc else 0
             if real > 0 or orcado > 0:
                 pct = round(real / orcado * 100, 1) if orcado > 0 else 0
                 result.append({'item': item, 'orcado': orcado, 'real': real, 'pct': pct})
         return result
 
-    comp_e = comparativo(todos_e, 'Entrada')
-    comp_s = comparativo(todos_s, 'Saída')
-    conn.close()
+    return render_template('orcamento.html', cfg=cfg, ano_sel=ano_sel, anos=ANOS, categorias=CATEGORIAS, livros=LIVROS,
+                           comparativo_e=comparativo(todos_e, 'Entrada'), comparativo_s=comparativo(todos_s, 'Saída'),
+                           orc_map={k: dict(v) for k, v in orc_map.items()})
 
-    return render_template('orcamento.html',
-        cfg=cfg, ano_sel=ano_sel, anos=ANOS, categorias=CATEGORIAS, livros=LIVROS,
-        comparativo_e=comp_e, comparativo_s=comp_s,
-        orc_map={k: dict(v) for k, v in orc_map.items()})
 
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
 #  RELATÓRIOS
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
 @app.route('/relatorio')
-@login_required
+@cong_required
 def relatorio():
-    cfg       = get_cfg(); cid = get_cong_id()
-    ano_sel   = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
+    cfg = get_cfg()
+    cid = get_cong_id()
+    ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
     livro_sel = request.args.get('livro', '')
-    tipo_sel  = request.args.get('tipo', '')
-    item_sel  = request.args.get('item', '')
-    mes_sel   = request.args.get('mes', '')
-    conn      = get_db()
+    tipo_sel = request.args.get('tipo', '')
+    item_sel = request.args.get('item', '')
+    mes_sel = request.args.get('mes', '')
+    with get_db() as conn:
+        q = 'SELECT * FROM transacoes WHERE cong_id=? AND ano=? AND COALESCE(transferencia,0)=0'
+        p = [cid, ano_sel]
+        if livro_sel:
+            q += ' AND livro=?'; p.append(livro_sel)
+        if tipo_sel:
+            q += ' AND tipo=?'; p.append(tipo_sel)
+        if item_sel:
+            q += ' AND item LIKE ?'; p.append(f'%{item_sel}%')
+        if mes_sel:
+            q += ' AND mes=?'; p.append(mes_sel)
+        q += f' ORDER BY {MES_ORDEM}, id'
+        lista = conn.execute(q, p).fetchall()
+        total_e = sum(t['valor'] for t in lista if t['tipo'] == 'Entrada')
+        total_s = sum(t['valor'] for t in lista if t['tipo'] == 'Saída')
+        superavit = total_e - total_s
+        pct = round(superavit / total_e * 100, 2) if total_e > 0 else 0
+        resumo_mensal = []
+        for mes in MESES:
+            q2 = 'SELECT tipo, COALESCE(SUM(valor),0) AS t FROM transacoes WHERE cong_id=? AND ano=? AND mes=? AND COALESCE(transferencia,0)=0'
+            p2 = [cid, ano_sel, mes]
+            if livro_sel:
+                q2 += ' AND livro=?'; p2.append(livro_sel)
+            q2 += ' GROUP BY tipo'
+            rows = conn.execute(q2, p2).fetchall()
+            e = sum(r['t'] for r in rows if r['tipo'] == 'Entrada')
+            s = sum(r['t'] for r in rows if r['tipo'] == 'Saída')
+            if e > 0 or s > 0:
+                resumo_mensal.append({'mes': mes, 'entradas': e, 'saidas': s, 'saldo': e - s})
+        resumo_livro = conn.execute('''SELECT livro,
+                   SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END) AS e,
+                   SUM(CASE WHEN tipo='Saída' THEN valor ELSE 0 END) AS s
+            FROM transacoes WHERE cong_id=? AND ano=? AND COALESCE(transferencia,0)=0 GROUP BY livro''', (cid, ano_sel)).fetchall()
+        items_disp = conn.execute('SELECT DISTINCT item FROM transacoes WHERE cong_id=? AND ano=? ORDER BY item',
+                                  (cid, ano_sel)).fetchall()
+    return render_template('relatorio.html', cfg=cfg, anos=ANOS, meses=MESES, livros=LIVROS, livros_labels=LIVROS_LABELS,
+        ano_sel=ano_sel, livro_sel=livro_sel, tipo_sel=tipo_sel, item_sel=item_sel, mes_sel=mes_sel, transacoes=lista,
+        total_e=total_e, total_s=total_s, superavit=superavit, pct=pct, resumo_mensal=resumo_mensal,
+        resumo_livro=resumo_livro, items_disponiveis=items_disp)
 
-    q = 'SELECT * FROM transacoes WHERE cong_id=? AND ano=?'
-    p = [cid, ano_sel]
-    if livro_sel: q += ' AND livro=?';           p.append(livro_sel)
-    if tipo_sel:  q += ' AND tipo=?';            p.append(tipo_sel)
-    if item_sel:  q += ' AND item LIKE ?';       p.append(f'%{item_sel}%')
-    if mes_sel:   q += ' AND mes=?';             p.append(mes_sel)
-    q += ' ORDER BY mes, id'
-    lista = conn.execute(q, p).fetchall()
 
-    total_e  = sum(t['valor'] for t in lista if t['tipo'] == 'Entrada')
-    total_s  = sum(t['valor'] for t in lista if t['tipo'] == 'Saída')
-    superavit = total_e - total_s
-    pct = round(superavit / total_e * 100, 2) if total_e > 0 else 0
-
-    resumo_mensal = []
-    for mes in MESES:
-        q2 = 'SELECT tipo, COALESCE(SUM(valor),0) as t FROM transacoes WHERE cong_id=? AND ano=? AND mes=?'
-        p2 = [cid, ano_sel, mes]
-        if livro_sel: q2 += ' AND livro=?'; p2.append(livro_sel)
-        q2 += ' GROUP BY tipo'
-        rows = conn.execute(q2, p2).fetchall()
-        e = sum(r['t'] for r in rows if r['tipo'] == 'Entrada')
-        s = sum(r['t'] for r in rows if r['tipo'] == 'Saída')
-        if e > 0 or s > 0:
-            resumo_mensal.append({'mes': mes, 'entradas': e, 'saidas': s, 'saldo': e-s})
-
-    resumo_livro = conn.execute('''
-        SELECT livro,
-               SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END) as e,
-               SUM(CASE WHEN tipo='Saída'   THEN valor ELSE 0 END) as s
-        FROM transacoes WHERE cong_id=? AND ano=? GROUP BY livro
-    ''', (cid, ano_sel)).fetchall()
-
-    items_disp = conn.execute(
-        'SELECT DISTINCT item FROM transacoes WHERE cong_id=? AND ano=? ORDER BY item', (cid, ano_sel)
-    ).fetchall()
-    conn.close()
-
-    return render_template('relatorio.html',
-        cfg=cfg, anos=ANOS, meses=MESES, livros=LIVROS, livros_labels=LIVROS_LABELS,
-        ano_sel=ano_sel, livro_sel=livro_sel, tipo_sel=tipo_sel,
-        item_sel=item_sel, mes_sel=mes_sel, transacoes=lista,
-        total_e=total_e, total_s=total_s, superavit=superavit, pct=pct,
-        resumo_mensal=resumo_mensal, resumo_livro=resumo_livro,
-        items_disponiveis=items_disp)
-
-# ─────────────────────────────────────────────
-#  CONFIGURAÇÕES
-# ─────────────────────────────────────────────
+# ═════════════════════════════════════════════
+#  CONFIGURAÇÕES / CONTA / TUTORIAL
+# ═════════════════════════════════════════════
 @app.route('/configuracoes', methods=['GET', 'POST'])
-@login_required
+@cong_required
 def configuracoes():
     if request.method == 'POST':
-        save_cfg({k: request.form.get(k, '') for k in
-                  ['nome_congregacao','nome_pastor','nome_tesoureiro','nome_auxiliar',
-                   'ano_atual','saldo_ano_anterior','pct_nacional','pct_fundo_local']})
-        # Atualizar também o nome na tabela de congregações
-        nome = request.form.get('nome_congregacao', '')
-        if nome:
-            conn = get_db()
-            conn.execute('UPDATE congregacoes SET nome=? WHERE id=?', (nome, get_cong_id()))
-            conn.commit(); conn.close()
-        flash('Configurações salvas!', 'success')
+        if session.get('papel') not in ('tesoureiro', 'pastor'):
+            abort(403)
+        dados = {k: request.form.get(k, '')[:200] for k in
+                 ['nome_congregacao', 'nome_pastor', 'nome_tesoureiro', 'nome_auxiliar', 'endereco',
+                  'ano_atual', 'saldo_ano_anterior']}
+        with get_db() as conn:
+            antes = {r['key']: r['value'] for r in conn.execute('SELECT key, value FROM config WHERE cong_id=?', (get_cong_id(),)).fetchall()}
+            for k, v in dados.items():
+                conn.execute('INSERT INTO config (cong_id, key, value) VALUES (?,?,?) ON CONFLICT (cong_id, key) DO UPDATE SET value=excluded.value',
+                             (get_cong_id(), k, v))
+            if dados['nome_congregacao']:
+                conn.execute('UPDATE congregacoes SET nome=? WHERE id=?', (dados['nome_congregacao'], get_cong_id()))
+                session['cong_nome'] = dados['nome_congregacao']
+            auditar(conn, 'config.salvar', 'Configurações da congregação', antes=antes, depois=dados)
+        flash('Configurações salvas.', 'success')
         return redirect(url_for('configuracoes'))
-
     return render_template('configuracoes.html', cfg=get_cfg(), anos=ANOS)
 
-# ─────────────────────────────────────────────
-#  MINHA CONTA (trocar senha)
-# ─────────────────────────────────────────────
+
 @app.route('/tutorial')
 @login_required
 def tutorial():
     return render_template('tutorial.html', cfg=get_cfg())
+
 
 @app.route('/minha-conta', methods=['GET', 'POST'])
 @login_required
 def minha_conta():
     cfg = get_cfg()
     if request.method == 'POST':
-        atual = request.form['senha_atual']
-        nova  = request.form['nova_senha']
-        conf  = request.form['confirmar_senha']
-        cid   = get_cong_id()
-        conn  = get_db()
-        cong  = conn.execute('SELECT * FROM congregacoes WHERE id=?', (cid,)).fetchone()
-        if cong['senha_hash'] != hash_senha(atual):
-            flash('Senha atual incorreta.', 'danger')
-        elif nova != conf:
-            flash('As senhas não coincidem.', 'danger')
-        elif len(nova) < 6:
-            flash('A nova senha deve ter pelo menos 6 caracteres.', 'danger')
-        else:
-            conn.execute('UPDATE congregacoes SET senha_hash=? WHERE id=?', (hash_senha(nova), cid))
-            conn.commit()
-            flash('Senha alterada com sucesso!', 'success')
-        conn.close()
+        atual, nova, conf = request.form['senha_atual'], request.form['nova_senha'], request.form['confirmar_senha']
+        with get_db() as conn:
+            u = conn.execute('SELECT * FROM usuarios WHERE id=?', (session['user_id'],)).fetchone()
+            if not verificar_senha(u['senha_hash'], atual):
+                flash('Senha atual incorreta.', 'danger')
+            elif nova != conf:
+                flash('As senhas não coincidem.', 'danger')
+            elif len(nova) < 8:
+                flash('A nova senha deve ter pelo menos 8 caracteres.', 'danger')
+            else:
+                conn.execute('UPDATE usuarios SET senha_hash=? WHERE id=?', (generate_password_hash(nova), u['id']))
+                auditar(conn, 'usuario.senha', 'Troca da própria senha')
+                flash('Senha alterada.', 'success')
     return render_template('minha_conta.html', cfg=cfg)
 
-# ─────────────────────────────────────────────
-#  API
-# ─────────────────────────────────────────────
+
 @app.route('/api/categorias/<livro>/<tipo>')
 @login_required
 def api_categorias(livro, tipo):
     return jsonify(CATEGORIAS.get(livro, {}).get(tipo, []))
 
-# ─────────────────────────────────────────────
-#  EXPORTAR EXCEL
-# ─────────────────────────────────────────────
-@app.route('/exportar/excel')
-@login_required
-def exportar_excel():
+
+# ═════════════════════════════════════════════
+#  TESOURARIA NACIONAL
+# ═════════════════════════════════════════════
+@app.route('/nacional/envios')
+@papel_required('admin', 'supervisor')
+def nacional_envios():
+    hoje = date.today()
+    ano = int(request.args.get('ano', hoje.year))
+    with get_db() as conn:
+        congs = conn.execute('SELECT * FROM congregacoes WHERE ativo=1 ORDER BY nome').fetchall()
+        fechs = conn.execute('SELECT id, cong_id, mes, status, total, comprovante_data FROM fechamentos WHERE ano=?', (ano,)).fetchall()
+        comps = {c['cong_id']: c for c in conn.execute('SELECT * FROM compromissos WHERE ano=?', (ano,)).fetchall()}
+        reg = regras_em(conn)
+    dia = int(reg.get('prazo_dia', 5))
+    inicio = (config_nacional().get('inicio_uso') or '2000-01')[:7]
+    por = {}
+    for f in fechs:
+        por.setdefault(f['cong_id'], {})[f['mes']] = f
+    linhas, total_ano, total_recebido = [], 0, 0
+    for c in congs:
+        meses, atrasados = [], 0
+        for m in range(1, 13):
+            f = por.get(c['id'], {}).get(m)
+            venc = R.prazo_envio(ano, m, dia)
+            antes_do_sistema = f'{ano}-{m:02d}' < inicio
+            atrasado = (not f or f['status'] in ('fechado', 'aprovado')) and hoje > venc and not antes_do_sistema
+            if atrasado:
+                atrasados += 1
+            meses.append({'m': m, 'f': f, 'atrasado': atrasado, 'antes': antes_do_sistema and not f})
+            if f and f['status'] in ('enviado', 'recebido'):
+                total_ano += f['total']
+                if f['status'] == 'recebido':
+                    total_recebido += f['total']
+        linhas.append({'c': c, 'meses': meses, 'atrasados': atrasados, 'comp': comps.get(c['id'])})
+    return render_template('nacional_envios.html', cfg=get_cfg(), ano=ano, anos=ANOS, linhas=linhas,
+                           total_ano=total_ano, total_recebido=total_recebido)
+
+
+@app.route('/nacional/fechamento/<int:fid>/receber', methods=['POST'])
+@papel_required('admin')
+def nacional_receber(fid):
+    with get_db() as conn:
+        f = conn.execute('SELECT * FROM fechamentos WHERE id=?', (fid,)).fetchone()
+        if not f or f['status'] != 'enviado':
+            abort(400)
+        conn.execute("UPDATE fechamentos SET status='recebido', recebido_por=?, recebido_em=CURRENT_TIMESTAMP WHERE id=?",
+                     (session['user_id'], fid))
+        auditar(conn, 'nacional.receber', f"{MESES[f['mes'] - 1]}/{f['ano']}", cong_id=f['cong_id'])
+    flash('Recebimento confirmado.', 'success')
+    return redirect(request.referrer or url_for('nacional_envios', ano=f['ano']))
+
+
+@app.route('/nacional/cartas', methods=['GET', 'POST'])
+@papel_required('admin')
+def nacional_cartas():
+    ano = int(request.values.get('ano', date.today().year + (1 if date.today().month >= 11 else 0)))
+    with get_db() as conn:
+        congs = conn.execute('SELECT * FROM congregacoes WHERE ativo=1 ORDER BY nome').fetchall()
+        sm = regras_em(conn, f'{ano - 1}-12-31')['salario_minimo']
+        reg = regras_em(conn, f'{ano}-01-01')
+        janela = R.janela_carta(ano)
+
+        def proposta(cid):
+            vals = []
+            for a, m in janela:
+                t = conn.execute('SELECT COALESCE(SUM(dizimo_bruto),0) AS t FROM dizimos WHERE cong_id=? AND ano=? AND mes=?',
+                                 (cid, a, MESES[m - 1])).fetchone()['t']
+                vals.append(float(t))
+            return R.carta_anual(vals, sm, reg)
+
+        if request.method == 'POST':
+            acao = request.form.get('acao')
+            alvos = [int(request.form['cong_id'])] if acao in ('emitir', 'manual') else [c['id'] for c in congs]
+            for cid in alvos:
+                if acao == 'manual':
+                    cat = request.form.get('categoria')
+                    if cat not in R.CATEGORIAS:
+                        abort(400)
+                    p = {'categoria': cat, 'nivelacao': request.form.get('nivelacao') == '1',
+                         'fundo_local_pct': max(0, min(30, int(request.form.get('fundo_local_pct') or 0))),
+                         'betel': request.form.get('betel') == '1', 'media': float(request.form.get('media') or 0),
+                         'meses': int(request.form.get('meses') or 0)}
+                    obs = request.form.get('observacao', '')[:300] or 'Emitida manualmente'
+                else:
+                    p = proposta(cid)
+                    obs = 'Calculada pelo sistema'
+                antes = conn.execute('SELECT * FROM compromissos WHERE cong_id=? AND ano=?', (cid, ano)).fetchone()
+                if acao == 'todas' and antes:
+                    continue
+                conn.execute('''INSERT INTO compromissos (cong_id, ano, categoria, nivelacao, fundo_local_pct, betel, media, meses,
+                                salario_minimo, observacao, emitido_por, emitido_em, confirmado_por, confirmado_em)
+                                VALUES (?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,NULL,NULL)
+                                ON CONFLICT (cong_id, ano) DO UPDATE SET categoria=excluded.categoria, nivelacao=excluded.nivelacao,
+                                fundo_local_pct=excluded.fundo_local_pct, betel=excluded.betel, media=excluded.media,
+                                meses=excluded.meses, salario_minimo=excluded.salario_minimo, observacao=excluded.observacao,
+                                emitido_por=excluded.emitido_por, emitido_em=CURRENT_TIMESTAMP, confirmado_por=NULL, confirmado_em=NULL''',
+                             (cid, ano, p['categoria'], int(p['nivelacao']), int(p['fundo_local_pct']), int(p['betel']),
+                              p.get('media', 0), p.get('meses', 0), sm, obs, session['user_id']))
+                auditar(conn, 'carta.emitir', f'Carta anual {ano}', antes=dict(antes) if antes else None, depois=p, cong_id=cid)
+            flash('Cartas emitidas. Os pastores precisam confirmar cada uma no sistema.', 'success')
+            return redirect(url_for('nacional_cartas', ano=ano))
+
+        linhas = []
+        for c in congs:
+            atual = conn.execute('SELECT * FROM compromissos WHERE cong_id=? AND ano=?', (c['id'], ano)).fetchone()
+            linhas.append({'c': c, 'proposta': proposta(c['id']), 'atual': atual})
+    return render_template('nacional_cartas.html', cfg=get_cfg(), ano=ano, anos=ANOS, linhas=linhas, sm=sm,
+                           janela=janela)
+
+
+@app.route('/nacional/carta/<int:cid>/<int:ano>')
+@papel_required('admin', 'supervisor')
+def nacional_carta_ver(cid, ano):
+    with get_db() as conn:
+        ctx_c = _carta_ctx(conn, cid, ano)
+    if not ctx_c:
+        abort(404)
+    return render_template('carta.html', cfg=get_cfg(), ano=ano, anos=ANOS, carta=ctx_c, nacional=config_nacional(),
+                           visao_nacional=True)
+
+
+@app.route('/nacional/regras', methods=['GET', 'POST'])
+@papel_required('admin')
+def nacional_regras():
+    with get_db() as conn:
+        if request.method == 'POST':
+            if request.form.get('acao') == 'conta':
+                for k in CONTA_NACIONAL_PADRAO:
+                    conn.execute('INSERT INTO config_nacional (key, value) VALUES (?,?) ON CONFLICT (key) DO UPDATE SET value=excluded.value',
+                                 (k, request.form.get(k, '')[:200]))
+                auditar(conn, 'nacional.conta', 'Dados da conta nacional')
+                flash('Dados da conta nacional salvos.', 'success')
+            else:
+                chave = request.form.get('chave')
+                try:
+                    valor = float(request.form.get('valor', '').replace(',', '.'))
+                    vig = date.fromisoformat(request.form.get('vigencia', '')).isoformat()
+                except ValueError:
+                    flash('Informe um valor e uma data válidos.', 'danger')
+                    return redirect(url_for('nacional_regras'))
+                if chave not in R.REGRAS_ROTULOS:
+                    abort(400)
+                conn.execute('INSERT INTO regras (chave, valor, vigencia, criado_por) VALUES (?,?,?,?) '
+                             'ON CONFLICT (chave, vigencia) DO UPDATE SET valor=excluded.valor, criado_por=excluded.criado_por',
+                             (chave, valor, vig, session['user_id']))
+                auditar(conn, 'regra.vigencia', f'{chave} = {valor} desde {vig}', cong_id=0)
+                flash('Nova vigência registrada. Os meses anteriores continuam com a regra antiga.', 'success')
+            return redirect(url_for('nacional_regras'))
+        todas = conn.execute('SELECT * FROM regras ORDER BY chave, vigencia DESC').fetchall()
+        vigentes = regras_em(conn)
+    return render_template('nacional_regras.html', cfg=get_cfg(), regras=todas, vigentes=vigentes,
+                           rotulos=R.REGRAS_ROTULOS, nacional=config_nacional(), campos_conta=CONTA_NACIONAL_PADRAO)
+
+
+@app.route('/nacional/auditoria')
+@papel_required('admin')
+def nacional_auditoria():
+    cid = request.args.get('cong', '')
+    with get_db() as conn:
+        q = '''SELECT a.*, c.nome AS cong_nome FROM auditoria a LEFT JOIN congregacoes c ON c.id=a.cong_id'''
+        p = []
+        if cid:
+            q += ' WHERE a.cong_id=?'
+            p.append(int(cid))
+        q += ' ORDER BY a.id DESC LIMIT 500'
+        itens = conn.execute(q, p).fetchall()
+        congs = conn.execute('SELECT id, nome FROM congregacoes ORDER BY nome').fetchall()
+    return render_template('nacional_auditoria.html', cfg=get_cfg(), itens=itens, congs=congs, cong_sel=cid)
+
+
+# ═════════════════════════════════════════════
+#  ADMIN — CONGREGAÇÕES E USUÁRIOS
+# ═════════════════════════════════════════════
+def _novo_usuario(conn, cid, nome, usuario, senha, papel):
+    usuario = usuario.strip().lower()
+    if not usuario or not all(ch.isalnum() or ch in '-_.' for ch in usuario):
+        raise ValueError('Usuário: use letras minúsculas, números, ponto, - ou _.')
+    if len(senha) < 8:
+        raise ValueError('A senha precisa ter pelo menos 8 caracteres.')
+    if conn.execute('SELECT 1 FROM usuarios WHERE usuario=?', (usuario,)).fetchone():
+        raise ValueError(f'O usuário "{usuario}" já existe.')
+    return conn.insert('INSERT INTO usuarios (cong_id, nome, usuario, senha_hash, papel) VALUES (?,?,?,?,?)',
+                       (cid, nome.strip()[:120] or usuario, usuario, generate_password_hash(senha), papel))
+
+
+@app.route('/admin')
+@papel_required('admin')
+def admin():
+    with get_db() as conn:
+        congs = conn.execute('SELECT * FROM congregacoes ORDER BY nome').fetchall()
+        users = conn.execute('SELECT id, cong_id, nome, usuario, papel, ativo FROM usuarios ORDER BY papel, nome').fetchall()
+    por_cong = {}
+    for u in users:
+        por_cong.setdefault(u['cong_id'], []).append(u)
+    return render_template('admin.html', congs=congs, por_cong=por_cong, nacionais=por_cong.get(None, []), cfg=get_cfg())
+
+
+@app.route('/admin/nova', methods=['GET', 'POST'])
+@papel_required('admin')
+def admin_nova_cong():
+    if request.method == 'POST':
+        nome = request.form['nome'].strip()
+        try:
+            with get_db() as conn:
+                if not nome:
+                    raise ValueError('Informe o nome da congregação.')
+                legado = 'usuario' in _cols(conn, 'congregacoes')
+                if legado:
+                    cid = conn.insert('INSERT INTO congregacoes (nome, usuario, senha_hash) VALUES (?,?,?)',
+                                      (nome, 'cong-' + secrets.token_hex(6), '-'))
+                else:
+                    cid = conn.insert('INSERT INTO congregacoes (nome) VALUES (?)', (nome,))
+                for k, v in _config_defaults(nome).items():
+                    conn.execute('INSERT INTO config (cong_id, key, value) VALUES (?,?,?) ON CONFLICT (cong_id, key) DO NOTHING',
+                                 (cid, k, v))
+                _novo_usuario(conn, cid, request.form.get('tes_nome', ''), request.form['tes_usuario'],
+                              request.form['tes_senha'], 'tesoureiro')
+                if request.form.get('pas_usuario'):
+                    _novo_usuario(conn, cid, request.form.get('pas_nome', ''), request.form['pas_usuario'],
+                                  request.form['pas_senha'], 'pastor')
+                auditar(conn, 'admin.nova_congregacao', nome, cong_id=cid)
+            flash(f'Congregação "{nome}" criada.', 'success')
+            return redirect(url_for('admin'))
+        except ValueError as e:
+            flash(str(e), 'danger')
+    return render_template('admin_nova.html', cfg=get_cfg())
+
+
+@app.route('/admin/usuario/novo', methods=['POST'])
+@papel_required('admin')
+def admin_novo_usuario():
+    papel = request.form.get('papel')
+    if papel not in PAPEIS:
+        abort(400)
+    cid = request.form.get('cong_id') or None
+    if papel in ('tesoureiro', 'pastor') and not cid:
+        flash('Tesoureiro e pastor precisam estar ligados a uma congregação.', 'danger')
+        return redirect(url_for('admin'))
+    if papel in ('admin', 'supervisor'):
+        cid = None
     try:
-        import openpyxl
-        from openpyxl.styles import Font, PatternFill, Alignment
-    except ImportError:
-        flash('openpyxl não instalado.', 'danger')
-        return redirect(url_for('relatorio'))
+        with get_db() as conn:
+            _novo_usuario(conn, int(cid) if cid else None, request.form.get('nome', ''), request.form.get('usuario', ''),
+                          request.form.get('senha', ''), papel)
+            auditar(conn, 'admin.novo_usuario', f"{request.form.get('usuario')} ({papel})", cong_id=int(cid) if cid else 0)
+        flash('Usuário criado.', 'success')
+    except ValueError as e:
+        flash(str(e), 'danger')
+    return redirect(url_for('admin'))
 
-    cfg     = get_cfg(); cid = get_cong_id()
+
+@app.route('/admin/usuario/<int:uid>/senha', methods=['POST'])
+@papel_required('admin')
+def admin_reset_senha(uid):
+    nova = request.form.get('nova_senha', '')
+    if len(nova) < 8:
+        flash('A senha precisa ter pelo menos 8 caracteres.', 'danger')
+        return redirect(url_for('admin'))
+    with get_db() as conn:
+        conn.execute('UPDATE usuarios SET senha_hash=? WHERE id=?', (generate_password_hash(nova), uid))
+        auditar(conn, 'admin.reset_senha', f'Usuário #{uid}', cong_id=0)
+    flash('Senha redefinida.', 'success')
+    return redirect(url_for('admin'))
+
+
+@app.route('/admin/usuario/<int:uid>/toggle', methods=['POST'])
+@papel_required('admin')
+def admin_toggle_usuario(uid):
+    if uid == session.get('user_id'):
+        flash('Você não pode desativar o próprio acesso.', 'danger')
+        return redirect(url_for('admin'))
+    with get_db() as conn:
+        conn.execute('UPDATE usuarios SET ativo = 1 - ativo WHERE id=?', (uid,))
+        auditar(conn, 'admin.toggle_usuario', f'Usuário #{uid}', cong_id=0)
+    flash('Acesso atualizado.', 'success')
+    return redirect(url_for('admin'))
+
+
+@app.route('/admin/<int:cid>/toggle', methods=['POST'])
+@papel_required('admin')
+def admin_toggle_cong(cid):
+    with get_db() as conn:
+        conn.execute('UPDATE congregacoes SET ativo = 1 - ativo WHERE id=?', (cid,))
+        auditar(conn, 'admin.toggle_congregacao', f'Congregação #{cid}', cong_id=cid)
+    flash('Status atualizado.', 'success')
+    return redirect(url_for('admin'))
+
+
+# ═════════════════════════════════════════════
+#  EXPORTAR EXCEL
+# ═════════════════════════════════════════════
+@app.route('/exportar/excel')
+@cong_required
+def exportar_excel():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    cfg = get_cfg()
+    cid = get_cong_id()
     ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
-    conn    = get_db()
-    lista   = conn.execute(
-        'SELECT * FROM transacoes WHERE cong_id=? AND ano=? ORDER BY mes,livro,tipo,item',
-        (cid, ano_sel)).fetchall()
-
-    wb  = openpyxl.Workbook()
-    ws  = wb.active; ws.title = 'Extrato'
-    azul   = PatternFill('solid', fgColor='1A3A5C')
+    with get_db() as conn:
+        lista = conn.execute(f'SELECT * FROM transacoes WHERE cong_id=? AND ano=? ORDER BY {MES_ORDEM}, livro, tipo, item',
+                             (cid, ano_sel)).fetchall()
+        resumo = []
+        for mes in MESES:
+            row = conn.execute('''SELECT SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END) AS e,
+                   SUM(CASE WHEN tipo='Saída' THEN valor ELSE 0 END) AS s
+                   FROM transacoes WHERE cong_id=? AND ano=? AND mes=? AND COALESCE(transferencia,0)=0''',
+                               (cid, ano_sel, mes)).fetchone()
+            resumo.append((mes, row['e'] or 0, row['s'] or 0))
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = 'Extrato'
+    azul = PatternFill('solid', fgColor='1A3A5C')
     branco = Font(color='FFFFFF', bold=True)
-    verde  = PatternFill('solid', fgColor='D4EFDF')
-    verm   = PatternFill('solid', fgColor='FADBD8')
-
-    cols = ['#','Livro','Tipo','Item','Valor R$','Mês','Ano','Data','Obs']
+    verde = PatternFill('solid', fgColor='D4EFDF')
+    verm = PatternFill('solid', fgColor='FADBD8')
+    cols = ['#', 'Livro', 'Tipo', 'Item', 'Valor R$', 'Mês', 'Ano', 'Data', 'Forma', 'Obs', 'Transferência interna']
     for ci, col in enumerate(cols, 1):
         cell = ws.cell(1, ci, col)
-        cell.font = branco; cell.fill = azul
-        cell.alignment = Alignment(horizontal='center')
-
+        cell.font, cell.fill, cell.alignment = branco, azul, Alignment(horizontal='center')
     for ri, t in enumerate(lista, 2):
-        ws.cell(ri,1,t['id']); ws.cell(ri,2,t['livro']); ws.cell(ri,3,t['tipo'])
-        ws.cell(ri,4,t['item'])
-        c = ws.cell(ri,5,round(t['valor'],2)); c.number_format='R$ #,##0.00'
-        ws.cell(ri,6,t['mes']); ws.cell(ri,7,t['ano'])
-        ws.cell(ri,8,t['data_registro'] or ''); ws.cell(ri,9,t['obs'] or '')
-        fill = verde if t['tipo']=='Entrada' else verm
-        for ci in range(1,10): ws.cell(ri,ci).fill = fill
-
-    for col, w in zip(['A','B','C','D','E','F','G','H','I'],
-                      [6,15,10,35,15,12,8,13,25]):
+        vals = [t['id'], t['livro'], t['tipo'], t['item'], round(t['valor'], 2), t['mes'], t['ano'],
+                t['data_registro'] or '', t.get('forma') or '', t['obs'] or '', 'sim' if t.get('transferencia') else '']
+        for ci, v in enumerate(vals, 1):
+            c = ws.cell(ri, ci, v)
+            c.fill = verde if t['tipo'] == 'Entrada' else verm
+        ws.cell(ri, 5).number_format = 'R$ #,##0.00'
+    for col, w in zip('ABCDEFGHIJK', [6, 15, 10, 35, 15, 12, 8, 13, 10, 30, 12]):
         ws.column_dimensions[col].width = w
-
-    # Resumo mensal
     ws2 = wb.create_sheet('Resumo Mensal')
-    ws2.cell(1,1,f'Resumo Mensal {ano_sel} — {cfg.get("nome_congregacao","")}').font = Font(bold=True,size=14)
+    ws2.cell(1, 1, f'Resumo Mensal {ano_sel} — {cfg.get("nome_congregacao", "")}').font = Font(bold=True, size=14)
     ws2.merge_cells('A1:E1')
-    cols2 = ['Mês','Entradas R$','Saídas R$','Saldo R$','% Superávit']
-    for ci, c2 in enumerate(cols2,1):
-        cell = ws2.cell(2,ci,c2); cell.font=branco; cell.fill=azul
-        cell.alignment=Alignment(horizontal='center')
-    te=ts=0
-    for ri, mes in enumerate(MESES,3):
-        row = conn.execute('''SELECT SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END) as e,
-               SUM(CASE WHEN tipo='Saída' THEN valor ELSE 0 END) as s
-               FROM transacoes WHERE cong_id=? AND ano=? AND mes=?''', (cid,ano_sel,mes)).fetchone()
-        e,s = (row['e'] or 0),(row['s'] or 0)
-        ws2.cell(ri,1,mes.capitalize())
-        for ci,v in enumerate([e,s,e-s],2):
-            c2=ws2.cell(ri,ci,round(v,2)); c2.number_format='R$ #,##0.00'
-        ws2.cell(ri,5,f'{round((e-s)/e*100,1) if e>0 else 0}%')
-        te+=e; ts+=s
-    tr=len(MESES)+3
-    ws2.cell(tr,1,'TOTAL').font=Font(bold=True)
-    for ci,v in enumerate([te,ts,te-ts],2):
-        c2=ws2.cell(tr,ci,round(v,2)); c2.number_format='R$ #,##0.00'; c2.font=Font(bold=True)
-    for col in ['A','B','C','D','E']: ws2.column_dimensions[col].width=18
-    conn.close()
+    for ci, c2 in enumerate(['Mês', 'Entradas R$', 'Saídas R$', 'Saldo R$', '% Superávit'], 1):
+        cell = ws2.cell(2, ci, c2)
+        cell.font, cell.fill, cell.alignment = branco, azul, Alignment(horizontal='center')
+    te = ts = 0
+    for ri, (mes, e, s) in enumerate(resumo, 3):
+        ws2.cell(ri, 1, mes.capitalize())
+        for ci, v in enumerate([e, s, e - s], 2):
+            c2 = ws2.cell(ri, ci, round(v, 2))
+            c2.number_format = 'R$ #,##0.00'
+        ws2.cell(ri, 5, f'{round((e - s) / e * 100, 1) if e > 0 else 0}%')
+        te += e
+        ts += s
+    tr = len(MESES) + 3
+    ws2.cell(tr, 1, 'TOTAL').font = Font(bold=True)
+    for ci, v in enumerate([te, ts, te - ts], 2):
+        c2 = ws2.cell(tr, ci, round(v, 2))
+        c2.number_format = 'R$ #,##0.00'
+        c2.font = Font(bold=True)
+    for col in 'ABCDE':
+        ws2.column_dimensions[col].width = 18
+    out = io.BytesIO()
+    wb.save(out)
+    out.seek(0)
+    return send_file(out, mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                     as_attachment=True, download_name=f'Tesouraria_{cfg.get("nome_congregacao", "INJ")}_{ano_sel}.xlsx')
 
-    out = io.BytesIO(); wb.save(out); out.seek(0)
-    return send_file(out,
-        mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
-        as_attachment=True,
-        download_name=f'Tesouraria_{cfg.get("nome_congregacao","INJ")}_{ano_sel}.xlsx')
 
-# ─────────────────────────────────────────────
-#  MAIN
-# ─────────────────────────────────────────────
-if __name__ == '__main__':
+@app.errorhandler(413)
+def muito_grande(_):
+    flash('O arquivo é grande demais. O limite é 5 MB.', 'danger')
+    return redirect(request.referrer or url_for('inicio'))
+
+
+@app.cli.command('criar-admin')
+def criar_admin_cli():
+    """Cria um usuário da Tesouraria Nacional: flask --app app criar-admin"""
+    import getpass
     init_db()
-    import socket
-    hostname = socket.gethostname()
-    try:
-        local_ip = socket.gethostbyname(hostname)
-    except Exception:
-        local_ip = '127.0.0.1'
+    usuario = input('Usuário: ').strip().lower()
+    senha = getpass.getpass('Senha (mínimo 8 caracteres): ')
+    with get_db() as conn:
+        _novo_usuario(conn, None, 'Tesouraria Nacional', usuario, senha, 'admin')
+    print('Administrador criado.')
+
+
+# ═════════════════════════════════════════════
+#  MAIN
+# ═════════════════════════════════════════════
+if os.environ.get('RENDER') and not db.IS_PG:
+    raise SystemExit('DATABASE_URL não definida: no Render os dados só ficam guardados num banco Postgres '
+                     '(ex.: Neon gratuito). Defina DATABASE_URL antes de publicar.')
+init_db()
+
+if __name__ == '__main__':
     port = int(os.environ.get('PORT', 8080))
-    print("\n" + "="*60)
-    print("  🏛️  TESOURARIA INJ — Sistema Multi-Congregação")
-    print("="*60)
-    print(f"  💻  Neste computador : http://127.0.0.1:{port}")
-    print(f"  🌐  Rede local (Wi-Fi): http://{local_ip}:{port}")
-    print(f"  👤  Admin padrão     : usuario=admin  senha=admin123")
-    print("  ⛔  Para parar: Ctrl+C")
-    print("="*60 + "\n")
+    print('\n' + '=' * 60)
+    print('  TESOURARIA INJ — Sistema Multi-Congregação')
+    print('=' * 60)
+    print(f'  Neste computador: http://127.0.0.1:{port}')
+    print('  Primeiro acesso: defina ADMIN_SENHA ou rode "flask --app app criar-admin"')
+    print('=' * 60 + '\n')
     app.run(debug=False, host='0.0.0.0', port=port)

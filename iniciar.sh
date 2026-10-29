@@ -38,4 +38,10 @@ echo ""
 # Abrir navegador após 1.5s
 (sleep 1.5 && open http://127.0.0.1:8080) &
 
+if [ -z "$ADMIN_SENHA" ] && [ ! -f data/tesouraria.db ]; then
+  echo "  Primeiro uso: digite uma senha para o usuário 'nacional' (mínimo 8 caracteres)."
+  read -s -p "  Senha: " ADMIN_SENHA; echo
+  export ADMIN_SENHA ADMIN_USUARIO=nacional
+fi
+
 python3 app.py

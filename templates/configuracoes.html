@@ -37,6 +37,10 @@
         </div>
 
         <div class="mb-4">
+          <label class="form-label"><i class="bi bi-geo-alt me-1"></i>Endereço da igreja</label>
+          <input type="text" name="endereco" class="form-control" value="{{ cfg.get('endereco', '') }}"/>
+        </div>
+        <div class="mb-3">
           <label class="form-label"><i class="bi bi-person me-1"></i>Auxiliar de Tesouraria</label>
           <input type="text" name="nome_auxiliar" class="form-control"
                  value="{{ cfg.get('nome_auxiliar', '') }}" placeholder="Nome completo"/>
@@ -70,54 +74,10 @@
           </div>
         </div>
 
-        <div class="alert alert-info py-2 px-3 mb-3" style="font-size:0.82rem">
+        <div class="alert alert-info py-2 px-3 mb-0" style="font-size:0.82rem">
           <i class="bi bi-info-circle me-1"></i>
-          As porcentagens abaixo são usadas para o cálculo automático da liquidação de dízimos.
-        </div>
-
-        <div class="row g-3 mb-3">
-          <div class="col-6">
-            <label class="form-label">% Envío Nacional</label>
-            <div class="input-group">
-              <input type="number" name="pct_nacional" class="form-control"
-                     step="0.01" min="0" max="1"
-                     value="{{ cfg.get('pct_nacional', '0.15') }}"/>
-              <span class="input-group-text">
-                {{ "%.0f" | format(cfg.get('pct_nacional', '0.15') | float * 100) }}%
-              </span>
-            </div>
-          </div>
-          <div class="col-6">
-            <label class="form-label">% Fundo Local</label>
-            <div class="input-group">
-              <input type="number" name="pct_fundo_local" class="form-control"
-                     step="0.01" min="0" max="1"
-                     value="{{ cfg.get('pct_fundo_local', '0.03') }}"/>
-              <span class="input-group-text">
-                {{ "%.0f" | format(cfg.get('pct_fundo_local', '0.03') | float * 100) }}%
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <!-- Preview distribuição dízimos -->
-        <div class="p-3 rounded-xl" style="background:#f8fafc; border:1px solid #eef0f4">
-          <div class="small fw-semibold mb-2 text-muted">Distribuição para R$ 1.000,00</div>
-          {% set pn = cfg.get('pct_nacional', '0.15') | float %}
-          {% set pf = cfg.get('pct_fundo_local', '0.03') | float %}
-          <div class="d-flex justify-content-between small">
-            <span>Envío Nacional ({{ "%.0f" | format(pn * 100) }}%)</span>
-            <span class="text-danger fw-semibold">- {{ (1000 * pn) | brl }}</span>
-          </div>
-          <div class="d-flex justify-content-between small">
-            <span>Fundo Local ({{ "%.0f" | format(pf * 100) }}%)</span>
-            <span class="text-danger fw-semibold">- {{ (1000 * pf) | brl }}</span>
-          </div>
-          <hr class="my-1"/>
-          <div class="d-flex justify-content-between small fw-bold">
-            <span>Líquido Pastor</span>
-            <span class="text-success">{{ (1000 * (1 - pn - pf)) | brl }}</span>
-          </div>
+          Os percentuais de envio não são mais digitados aqui. Eles vêm da carta anual emitida pela Tesouraria Nacional
+          e confirmada pelo pastor (menu <a href="{{ url_for('carta') }}">Carta anual</a>).
         </div>
       </div>
     </div>

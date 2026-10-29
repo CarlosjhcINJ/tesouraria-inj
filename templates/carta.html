@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% block title %}Carta anual {{ ano }} — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Carta anual</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h1 class="page-title">Carta anual de compromissos</h1>
+    <p class="text-muted mb-0 small">Emitida pela Tesouraria Nacional e confirmada pelo pastor. Os percentuais valem para o fechamento de cada mês do ano.</p>
+  </div>
+  {% if not visao_nacional %}
+  <form class="d-flex gap-2 align-items-center">
+    <label class="form-label mb-0 small fw-semibold">Ano:</label>
+    <select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
+      {% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}
+    </select>
+  </form>
+  {% endif %}
+</div>
+
+{% if not carta %}
+  <div class="alert alert-info">A carta de {{ ano }} ainda não foi emitida pela Tesouraria Nacional.</div>
+{% else %}
+  {% set c = carta.c %}
+  <div class="mb-3">
+    {% if c['confirmado_em'] %}
+      <span class="badge bg-success-subtle text-success-emphasis p-2"><i class="bi bi-check-circle me-1"></i>Confirmada por {{ carta.confirmado_nome }} em {{ c['confirmado_em'] | data }}</span>
+    {% else %}
+      <span class="badge bg-warning-subtle text-warning-emphasis p-2"><i class="bi bi-hourglass-split me-1"></i>Aguardando confirmação do pastor</span>
+      {% if papel == 'pastor' %}
+      <form method="POST" action="{{ url_for('carta_confirmar', ano=ano) }}" class="d-inline ms-2">
+        <button class="btn btn-sm btn-success"><i class="bi bi-check2 me-1"></i>Confirmar que recebi e li a carta</button>
+      </form>
+      {% endif %}
+    {% endif %}
+  </div>
+
+  <div class="carta-doc">
+    <div class="carta-head">
+      <img src="{{ url_for('static', filename='img/logo-inj.png') }}" alt="Igreja do Nome de Jesus"/>
+      <div class="sede">
+        <strong>IGREJA DO NOME DE JESUS</strong><br/>Sede Nacional<br/>{{ nacional.endereco_sede }}<br/>CNPJ: {{ nacional.cnpj }}
+      </div>
+    </div>
+    <p><b>De:</b> Bispo Missionário e Diretoria Nacional<br/><b>Para:</b> Pastor da congregação de {{ carta.cong_nome }}<br/>
+      <b>Assunto:</b> envios à Tesouraria Nacional e responsabilidades para {{ ano }}<br/>
+      <b>Data de emissão:</b> {{ c['emitido_em'] | data }}</p>
+    <p>Uma saudação cordial do Bispo Missionário e da Diretoria Nacional, desejando as maiores bênçãos do Senhor sobre vossa vida, família e congregação.</p>
+    <p>{{ carta.p1 }}</p>
+    <p>{{ carta.p2 }}</p>
+    <table class="table table-sm mt-3">
+      <thead><tr><th>Compromisso para {{ ano }}</th><th>Valor</th></tr></thead>
+      <tbody>{% for item, valor in carta.lista %}<tr><td>{{ item }}</td><td>{{ valor }}</td></tr>{% endfor %}</tbody>
+    </table>
+    {% if c['observacao'] and c['observacao'] not in ('Calculada pelo sistema', 'Emitida manualmente') %}<p class="small text-muted mb-0">Observação: {{ c['observacao'] }}</p>{% endif %}
+    <p class="mt-3 mb-0">Agradecemos ao pastor pelo compromisso e pela pontualidade nos envios, em cumprimento ao nosso Regulamento Interno.</p>
+  </div>
+{% endif %}
+{% endblock %}

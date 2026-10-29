@@ -9,7 +9,7 @@
       <div class="form-section-title"><i class="bi bi-person-gear me-2"></i>Alterar Senha</div>
 
       <div class="mb-4 p-3 rounded-xl" style="background:#f8fafc; border:1px solid #eef0f4">
-        <div class="small text-muted">Congregação</div>
+        <div class="small text-muted">{{ 'Congregação' if session.get('cong_id') else 'Acesso' }}</div>
         <div class="fw-semibold">{{ session.get('cong_nome', '—') }}</div>
         <div class="small text-muted mt-1">Usuário: <code>{{ session.get('usuario', '—') }}</code></div>
       </div>
@@ -21,12 +21,12 @@
         </div>
         <div class="mb-3">
           <label class="form-label">Nova Senha</label>
-          <input type="password" name="nova_senha" class="form-control" required minlength="6"
-                 placeholder="Mínimo 6 caracteres"/>
+          <input type="password" name="nova_senha" class="form-control" required minlength="8"
+                 placeholder="Mínimo 8 caracteres"/>
         </div>
         <div class="mb-4">
           <label class="form-label">Confirmar Nova Senha</label>
-          <input type="password" name="confirmar_senha" class="form-control" required minlength="6"/>
+          <input type="password" name="confirmar_senha" class="form-control" required minlength="8"/>
         </div>
         <button type="submit" class="btn btn-primary-custom w-100">
           <i class="bi bi-shield-lock me-2"></i>Alterar Senha

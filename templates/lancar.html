@@ -1,0 +1,123 @@
+{% extends 'base.html' %}
+{% block title %}Registrar {{ tipo or 'lançamento' }} — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Registrar {{ tipo | lower if tipo else 'lançamento' }}</li>{% endblock %}
+
+{% block content %}
+<div class="mx-auto" style="max-width:820px">
+  <!-- Passo A: entrada ou saída -->
+  <div class="passos mb-3">
+    <span class="passo {{ 'feito' if tipo else 'atual' }}">1. Entrada ou saída</span>
+    <span class="passo {{ 'atual' if tipo else '' }}" id="p2">2. Que tipo</span>
+    <span class="passo" id="p3">3. Valor e data</span>
+  </div>
+
+  {% if not tipo %}
+  <h1 class="page-title mb-3">O que você vai registrar?</h1>
+  <div class="row g-3">
+    <div class="col-md-6"><a href="{{ url_for('lancar', tipo='Entrada') }}" class="guia guia-entrada h-100"><span class="guia-txt"><b><i class="bi bi-arrow-down-circle me-1"></i>ENTRADA</b><small>Dinheiro que entrou</small></span><i class="bi bi-chevron-right"></i></a></div>
+    <div class="col-md-6"><a href="{{ url_for('lancar', tipo='Saída') }}" class="guia guia-saida h-100"><span class="guia-txt"><b><i class="bi bi-arrow-up-circle me-1"></i>SAÍDA</b><small>Dinheiro que saiu</small></span><i class="bi bi-chevron-right"></i></a></div>
+  </div>
+  <p class="small text-muted mt-3">Dízimos têm tela própria: <a href="{{ url_for('dizimos') }}">Registrar dízimos</a>.</p>
+  {% else %}
+
+  <div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+    <h1 class="page-title mb-0">{% if tipo == 'Entrada' %}<span class="text-entrada">Registrar ENTRADA</span>{% else %}<span class="text-saida">Registrar SAÍDA</span>{% endif %}</h1>
+    <a href="{{ url_for('lancar', tipo='Saída' if tipo == 'Entrada' else 'Entrada') }}" class="btn btn-sm btn-outline-secondary">Trocar para {{ 'saída' if tipo == 'Entrada' else 'entrada' }}</a>
+  </div>
+
+  <!-- Passo B: tipo -->
+  <div id="escolha">
+    <p class="text-muted">Escolha o tipo de {{ tipo | lower }}:</p>
+    {% for g in grupos %}
+    <div class="form-card mb-3">
+      <div class="fw-bold">{{ g.rotulo }}</div>
+      <div class="small text-muted mb-2">{{ g.ajuda }}</div>
+      <div class="d-flex flex-wrap gap-2">
+        {% for it in g.itens %}
+        <button type="button" class="btn btn-sm btn-outline-primary item-btn" data-livro="{{ g.livro }}" data-item="{{ it }}" data-rotulo="{{ g.rotulo }}">{{ it }}</button>
+        {% endfor %}
+      </div>
+    </div>
+    {% endfor %}
+    {% if tipo == 'Entrada' %}
+    <div class="form-card mb-3"><div class="fw-bold">Dízimos</div><div class="small text-muted mb-2">Têm tela própria, que faz a divisão sozinha.</div><a href="{{ url_for('dizimos') }}" class="btn btn-sm btn-outline-primary">Registrar dízimos</a></div>
+    {% endif %}
+  </div>
+
+  <!-- Passo C: valor -->
+  <div id="formulario" class="form-card" hidden>
+    <div class="d-flex justify-content-between align-items-start mb-3">
+      <div>
+        <div class="small text-muted" id="f-livro"></div>
+        <div class="fs-5 fw-bold" id="f-item"></div>
+      </div>
+      <button type="button" class="btn btn-sm btn-link" id="trocar">Trocar o tipo</button>
+    </div>
+    <form method="POST" action="{{ url_for('lancamentos') }}" enctype="multipart/form-data">
+      <input type="hidden" name="tipo" value="{{ tipo }}"/>
+      <input type="hidden" name="livro" id="h-livro"/>
+      <input type="hidden" name="item" id="h-item"/>
+      <input type="hidden" name="voltar" value="lancar"/>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label">Valor (R$)</label>
+          <div class="input-group input-group-lg"><span class="input-group-text">R$</span>
+            <input type="text" name="valor" id="valor" class="form-control" placeholder="0,00" required inputmode="decimal"/></div>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Data</label>
+          <input type="text" name="data_registro" class="form-control form-control-lg" value="{{ now().strftime('%d/%m/%Y') }}" placeholder="dd/mm/aaaa"/>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Mês</label>
+          <select name="mes" class="form-select">{% for m in meses %}<option value="{{ m }}" {% if m == mes_atual %}selected{% endif %}>{{ m | capitalize }}</option>{% endfor %}</select>
+        </div>
+        <div class="col-6 col-md-3">
+          <label class="form-label">Ano</label>
+          <select name="ano" class="form-select">{% for a in anos %}<option value="{{ a }}" {% if a == ano_atual %}selected{% endif %}>{{ a }}</option>{% endfor %}</select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">Forma</label>
+          <select name="forma" class="form-select"><option value="">—</option>{% for fm in formas %}<option value="{{ fm }}">{{ fm }}</option>{% endfor %}</select>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Comprovante {% if tipo == 'Saída' %}<span class="text-danger">(obrigatório em saídas, § 95)</span>{% else %}<span class="text-muted fw-normal">(opcional)</span>{% endif %}</label>
+          <input type="file" name="anexo" class="form-control" accept="application/pdf,image/jpeg,image/png,image/webp" capture="environment"/>
+          <div class="form-text">No celular, dá para tirar a foto do recibo na hora.</div>
+        </div>
+        <div class="col-12">
+          <label class="form-label">Observação</label>
+          <input type="text" name="obs" class="form-control" placeholder="Opcional"/>
+        </div>
+      </div>
+      <button class="btn btn-lg w-100 mt-4 {{ 'btn-success' if tipo == 'Entrada' else 'btn-danger' }}"><i class="bi bi-check2-circle me-2"></i>Registrar {{ tipo | lower }}</button>
+    </form>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const esc = document.getElementById('escolha'), frm = document.getElementById('formulario');
+  if (!esc) return;
+  function abrir(livro, item, rotulo) {
+    document.getElementById('h-livro').value = livro;
+    document.getElementById('h-item').value = item;
+    document.getElementById('f-livro').textContent = rotulo;
+    document.getElementById('f-item').textContent = item;
+    esc.hidden = true; frm.hidden = false;
+    document.getElementById('p2').className = 'passo feito';
+    document.getElementById('p3').className = 'passo atual';
+    document.getElementById('valor').focus();
+  }
+  document.querySelectorAll('.item-btn').forEach(b => b.addEventListener('click', () => abrir(b.dataset.livro, b.dataset.item, b.dataset.rotulo)));
+  document.getElementById('trocar').addEventListener('click', () => {
+    esc.hidden = false; frm.hidden = true;
+    document.getElementById('p2').className = 'passo atual';
+    document.getElementById('p3').className = 'passo';
+  });
+})();
+</script>
+{% endblock %}

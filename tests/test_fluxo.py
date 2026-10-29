@@ -182,7 +182,8 @@ def test_fluxo_completo(app):
     # todas as páginas abrem para cada perfil
     for cli, paginas in [
         (tes, ['/', '/lancamentos', '/dizimos', '/fechamento', '/carta?ano=2026', '/orcamento', '/relatorio',
-               '/configuracoes', '/minha-conta', '/tutorial', '/exportar/excel?ano=2026']),
+               '/configuracoes', '/minha-conta', '/tutorial', '/exportar/excel?ano=2026', '/lancar', '/lancar?tipo=Entrada',
+               '/lancar?tipo=Saída', '/visao-geral', '/lancamentos?livro=Projetos', '/livro-do-mes?ano=2026&mes=9']),
         (pas, ['/', '/lancamentos', '/dizimos', '/fechamento?ano=2026&mes=9', '/carta?ano=2026']),
         (adm, ['/nacional/envios', '/nacional/cartas?ano=2027', '/nacional/regras', '/admin', '/nacional/auditoria',
                f'/nacional/carta/{cid}/2026']),
@@ -229,3 +230,29 @@ def test_foto_de_comprovante_e_reduzida(app):
     assert a['tipo'] == 'image/jpeg' and a['nome'] == 'foto.jpg'
     assert len(a['dados']) < 300 * 1024
     assert Image.open(io.BytesIO(a['dados'])).size[0] <= 1600
+
+
+def test_inicio_guiado_e_livro_do_mes(app):
+    tes = entrar(app, 'vr.tesouraria', 'tesoureiro123')
+    inicio = tes.get('/?ano=2026&mes=9').get_data(as_text=True)
+    assert 'Registrar ENTRADA' in inicio and 'Registrar SAÍDA' in inicio and 'Orçamento do ano' in inicio
+    r = tes.post('/lancamentos', data={'livro': 'Projetos', 'tipo': 'Entrada', 'item': 'Brechó', 'valor': '85,50',
+                                       'mes': 'novembro', 'ano': 2026, 'data_registro': '02/11/2026', 'voltar': 'lancar'})
+    assert '/lancar' in r.headers['Location']
+    livro = tes.get('/livro-do-mes?ano=2026&mes=9').get_data(as_text=True)
+    assert 'LIVRO CAIXA DO MÊS' in livro and 'Serviços Públicos' in livro and 'Saldo anterior' in livro
+    assert 'Brechó' in tes.get('/livro-do-mes?ano=2026&mes=11').get_data(as_text=True)
+
+
+def test_admin_abre_congregacao(app):
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    adm = entrar(app, 'nacional', 'senha-forte-123')
+    with appmod.get_db() as conn:
+        cid = conn.execute("SELECT id FROM congregacoes WHERE nome='Vila Ramos/SP'").fetchone()['id']
+    assert adm.get(f'/ver/{cid}').status_code == 302
+    pagina = adm.get('/').get_data(as_text=True)
+    assert 'Vila Ramos/SP' in pagina and 'Registrar ENTRADA' in pagina
+    assert adm.get('/lancar?tipo=Saída').status_code == 200
+    adm.get('/ver/nacional')
+    assert adm.get('/').status_code == 302

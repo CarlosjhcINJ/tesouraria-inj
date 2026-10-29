@@ -308,7 +308,8 @@ def papel_required(*papeis):
         def wrapper(*a, **kw):
             if not session.get('user_id'):
                 return redirect(url_for('login', next=request.path))
-            if session.get('papel') not in papeis:
+            admin_na_cong = session.get('papel') == 'admin' and session.get('cong_id') and 'tesoureiro' in papeis
+            if session.get('papel') not in papeis and not admin_na_cong:
                 flash('Você não tem permissão para esta página.', 'danger')
                 return redirect(url_for('inicio'))
             return f(*a, **kw)
@@ -329,7 +330,7 @@ def cong_required(f):
 
 
 def pode_editar():
-    return session.get('papel') == 'tesoureiro'
+    return session.get('papel') == 'tesoureiro' or (session.get('papel') == 'admin' and bool(session.get('cong_id')))
 
 
 def get_cong_id():
@@ -378,7 +379,10 @@ MES_ORDEM = 'CASE mes ' + ' '.join(f"WHEN '{m}' THEN {i + 1}" for i, m in enumer
 # ═════════════════════════════════════════════
 def fmt_brl(value):
     try:
-        return f"R$ {float(value):,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
+        v = round(float(value), 2) + 0.0
+        if v == 0:
+            v = 0.0
+        return f"R$ {v:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     except Exception:
         return "R$ 0,00"
 
@@ -468,6 +472,38 @@ def logout():
     return redirect(url_for('login'))
 
 
+@app.route('/ver/<int:cid>')
+@papel_required('admin', 'supervisor')
+def ver_congregacao(cid):
+    with get_db() as conn:
+        c = conn.execute('SELECT * FROM congregacoes WHERE id=?', (cid,)).fetchone()
+    if not c:
+        abort(404)
+    session['cong_id'] = c['id']
+    session['cong_nome'] = c['nome']
+    return redirect(url_for('dashboard'))
+
+
+@app.route('/ver/nacional')
+@papel_required('admin', 'supervisor')
+def ver_nacional():
+    session['cong_id'] = None
+    session['cong_nome'] = 'Tesouraria Nacional'
+    return redirect(url_for('nacional_envios'))
+
+
+@app.context_processor
+def ctx_congregacoes():
+    if session.get('papel') in ('admin', 'supervisor'):
+        try:
+            with get_db() as conn:
+                lista = conn.execute('SELECT id, nome FROM congregacoes WHERE ativo=1 ORDER BY nome').fetchall()
+        except Exception:
+            lista = []
+        return {'lista_congregacoes': lista}
+    return {'lista_congregacoes': []}
+
+
 @app.route('/inicio')
 @login_required
 def inicio():
@@ -482,6 +518,47 @@ def inicio():
 @app.route('/')
 @cong_required
 def dashboard():
+    """Página inicial: resumo do mês e caminhos guiados."""
+    cfg = get_cfg()
+    cid = get_cong_id()
+    hoje = date.today()
+    ano = int(request.args.get('ano', hoje.year))
+    mes = int(request.args.get('mes', hoje.month))
+    nome_mes = MESES[mes - 1]
+    with get_db() as conn:
+        def soma(where, params):
+            return conn.execute('SELECT COALESCE(SUM(valor),0) AS t FROM transacoes WHERE cong_id=? AND ano=? '
+                                'AND COALESCE(transferencia,0)=0 ' + where, (cid, ano, *params)).fetchone()['t']
+        ent_mes = soma("AND mes=? AND tipo='Entrada'", (nome_mes,))
+        sai_mes = soma("AND mes=? AND tipo='Saída'", (nome_mes,))
+        diz_mes = conn.execute('SELECT COALESCE(SUM(dizimo_bruto),0) AS t FROM dizimos WHERE cong_id=? AND ano=? AND mes=?',
+                               (cid, ano, nome_mes)).fetchone()['t']
+        ent_ano = soma("AND tipo='Entrada'", ())
+        sai_ano = soma("AND tipo='Saída'", ())
+        orc = conn.execute("SELECT COALESCE(SUM(orcam_ano),0) AS t FROM orcamento WHERE cong_id=? AND ano=? AND tipo='Saída'",
+                           (cid, ano)).fetchone()['t']
+        n_mes = conn.execute('SELECT COUNT(*) AS n FROM transacoes WHERE cong_id=? AND ano=? AND mes=? AND origem IS NULL',
+                             (cid, ano, nome_mes)).fetchone()['n']
+        fech = conn.execute('SELECT * FROM fechamentos WHERE cong_id=? AND ano=? AND mes=?', (cid, ano, mes)).fetchone()
+        livros = {}
+        for lv in LIVROS:
+            r = conn.execute('''SELECT SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END) AS e,
+                                       SUM(CASE WHEN tipo='Saída' THEN valor ELSE 0 END) AS s
+                                FROM transacoes WHERE cong_id=? AND ano=? AND mes=? AND livro=?''',
+                             (cid, ano, nome_mes, lv)).fetchone()
+            livros[lv] = {'e': r['e'] or 0, 's': r['s'] or 0}
+        recentes = conn.execute('SELECT * FROM transacoes WHERE cong_id=? AND origem IS NULL ORDER BY id DESC LIMIT 6',
+                                (cid,)).fetchall()
+    saldo_ant = float(cfg.get('saldo_ano_anterior', 0) or 0)
+    return render_template('inicio.html', cfg=cfg, ano=ano, mes=mes, nome_mes=nome_mes, anos=ANOS,
+                           ent_mes=ent_mes, sai_mes=sai_mes, diz_mes=diz_mes, saldo=saldo_ant + ent_ano - sai_ano,
+                           orc=orc, sai_ano=sai_ano, n_mes=n_mes, fech=fech, livros=livros, livros_labels=LIVROS_LABELS,
+                           recentes=recentes)
+
+
+@app.route('/visao-geral')
+@cong_required
+def visao_geral():
     cfg = get_cfg()
     cid = get_cong_id()
     ano = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
@@ -555,6 +632,7 @@ def lancamentos():
     cid = get_cong_id()
     ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
     mes_sel = request.args.get('mes', '')
+    livro_sel = request.args.get('livro', '')
 
     if request.method == 'POST':
         if not pode_editar():
@@ -584,12 +662,14 @@ def lancamentos():
             if anexo:
                 conn.execute('INSERT INTO anexos (transacao_id, nome, tipo, dados) VALUES (?,?,?,?)',
                              (tid, anexo['nome'], anexo['tipo'], anexo['dados']))
-        msg = f'Lançamento de {fmt_brl(valor)} registrado.'
+        msg = f'{tipo} de {fmt_brl(valor)} registrada: {item}.'
         if tipo == 'Saída' and not anexo:
             msg += ' Falta anexar o comprovante da despesa (§ 95).'
             flash(msg, 'warning')
         else:
             flash(msg, 'success')
+        if request.form.get('voltar') == 'lancar':
+            return redirect(url_for('lancar', tipo=tipo))
         return redirect(url_for('lancamentos', ano=ano, mes=mes))
 
     with get_db() as conn:
@@ -599,6 +679,9 @@ def lancamentos():
         if mes_sel:
             q += ' AND t.mes=?'
             p.append(mes_sel)
+        if livro_sel in LIVROS:
+            q += ' AND t.livro=?'
+            p.append(livro_sel)
         q += ' ORDER BY t.id DESC'
         lista = conn.execute(q, p).fetchall()
         travados = {MESES[f['mes'] - 1] for f in
@@ -609,7 +692,86 @@ def lancamentos():
     return render_template('lancamentos.html',
         cfg=cfg, categorias=CATEGORIAS, meses=MESES, anos=ANOS, livros=LIVROS, formas=FORMAS,
         livros_labels=LIVROS_LABELS, transacoes=lista, travados=travados,
-        ano_sel=ano_sel, mes_sel=mes_sel, total_e=total_e, total_s=total_s)
+        ano_sel=ano_sel, mes_sel=mes_sel, livro_sel=livro_sel, total_e=total_e, total_s=total_s)
+
+
+GRUPOS_LANCAR = {
+    'Entrada': [('FundoLocal', 'Caixa local', 'Ofertas dos cultos, votos, ofertas especiais'),
+                ('Projetos', 'Projetos', 'Cantina, brechó, vendas, votos para construção'),
+                ('Envios', 'Envios (vão para a nacional)', 'Ofertas missionárias, Raios de Luz, Safras, distritais')],
+    'Saída': [('FundoLocal', 'Caixa local', 'Aluguel, água e luz, manutenção, materiais, evangelismo'),
+              ('Projetos', 'Projetos', 'Compras e gastos dos projetos e da construção')],
+}
+
+
+@app.route('/lancar')
+@cong_required
+def lancar():
+    if not pode_editar():
+        flash('Somente o tesoureiro registra lançamentos.', 'info')
+        return redirect(url_for('lancamentos'))
+    hoje = date.today()
+    tipo = request.args.get('tipo', '')
+    if tipo not in ('Entrada', 'Saída'):
+        tipo = ''
+    grupos = []
+    for livro, rotulo, ajuda in GRUPOS_LANCAR.get(tipo, []):
+        grupos.append({'livro': livro, 'rotulo': rotulo, 'ajuda': ajuda, 'itens': CATEGORIAS[livro][tipo]})
+    return render_template('lancar.html', cfg=get_cfg(), tipo=tipo, grupos=grupos, meses=MESES, anos=ANOS, formas=FORMAS,
+                           mes_atual=MESES[hoje.month - 1], ano_atual=hoje.year,
+                           livro=request.args.get('livro', ''), item=request.args.get('item', ''))
+
+
+@app.route('/livro-do-mes')
+@cong_required
+def livro_do_mes():
+    """Livro caixa do mês para imprimir: todas as movimentações, por livro, com saldos."""
+    cfg = get_cfg()
+    cid = get_cong_id()
+    hoje = date.today()
+    ano = int(request.args.get('ano', hoje.year))
+    mes = int(request.args.get('mes', hoje.month))
+    nome_mes = MESES[mes - 1]
+    anteriores = MESES[:mes - 1]
+    saldo_ano_ant = float(cfg.get('saldo_ano_anterior', 0) or 0)
+
+    def ordem_data(t):
+        try:
+            return (datetime.strptime(t['data_registro'] or '', '%d/%m/%Y'), t['id'])
+        except ValueError:
+            return (datetime(ano, mes, 28), t['id'])
+
+    blocos = []
+    with get_db() as conn:
+        for lv in LIVROS:
+            ant = 0.0
+            if anteriores:
+                marcas = ','.join('?' * len(anteriores))
+                r = conn.execute(f'''SELECT SUM(CASE WHEN tipo='Entrada' THEN valor ELSE -valor END) AS t
+                                     FROM transacoes WHERE cong_id=? AND ano=? AND livro=? AND mes IN ({marcas})''',
+                                 (cid, ano, lv, *anteriores)).fetchone()
+                ant = r['t'] or 0.0
+            if lv == 'FundoLocal':
+                ant += saldo_ano_ant
+            movs = sorted(conn.execute('SELECT * FROM transacoes WHERE cong_id=? AND ano=? AND mes=? AND livro=?',
+                                       (cid, ano, nome_mes, lv)).fetchall(), key=ordem_data)
+            linhas, saldo, te, ts = [], ant, 0.0, 0.0
+            for t in movs:
+                if t['tipo'] == 'Entrada':
+                    saldo += t['valor']; te += t['valor']
+                else:
+                    saldo -= t['valor']; ts += t['valor']
+                linhas.append({'t': t, 'saldo': saldo})
+            blocos.append({'livro': lv, 'rotulo': LIVROS_LABELS[lv], 'anterior': ant, 'linhas': linhas,
+                           'entradas': te, 'saidas': ts, 'final': saldo})
+        dizimos_mes = conn.execute(f'SELECT * FROM dizimos WHERE cong_id=? AND ano=? AND mes=? ORDER BY id',
+                                   (cid, ano, nome_mes)).fetchall()
+        fech = conn.execute('SELECT * FROM fechamentos WHERE cong_id=? AND ano=? AND mes=?', (cid, ano, mes)).fetchone()
+        cong = conn.execute('SELECT * FROM congregacoes WHERE id=?', (cid,)).fetchone()
+    return render_template('livro_do_mes.html', cfg=cfg, cong=cong, ano=ano, mes=mes, nome_mes=nome_mes, blocos=blocos,
+                           dizimos_mes=dizimos_mes, fech=fech,
+                           total_e=sum(b['entradas'] for b in blocos), total_s=sum(b['saidas'] for b in blocos),
+                           total_ant=sum(b['anterior'] for b in blocos), total_final=sum(b['final'] for b in blocos))
 
 
 @app.route('/lancamentos/<int:tid>/editar', methods=['GET', 'POST'])

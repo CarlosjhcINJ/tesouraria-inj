@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Livro caixa — {{ cong['nome'] }} — {{ nome_mes | capitalize }} {{ ano }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root { --navy:#25307a; --azul:#1d6fb8; --claro:#e9eefb; --cinza:#5d6d7e; --verde:#1e8449; --verm:#a93226; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', Arial, sans-serif; color: #1b2340; margin: 0; background: #eef1f6; font-size: 12.5px; }
+  .folha { background: #fff; max-width: 980px; margin: 20px auto; padding: 24px 28px; border: 2px solid var(--navy); border-radius: 14px; }
+  .topo { display: flex; align-items: center; gap: 16px; border-bottom: 2px solid var(--navy); padding-bottom: 12px; margin-bottom: 12px; }
+  .topo img { width: 110px; }
+  .topo h1 { margin: 0; color: var(--navy); font-size: 22px; font-weight: 800; }
+  .topo .sub { color: var(--azul); font-weight: 700; }
+  .topo .direita { margin-left: auto; text-align: right; font-size: 12px; color: var(--cinza); }
+  h2 { font-size: 14px; color: #fff; background: var(--navy); padding: 6px 10px; border-radius: 6px; margin: 18px 0 6px; }
+  table { width: 100%; border-collapse: collapse; }
+  th { text-align: left; font-size: 11px; color: var(--cinza); border-bottom: 1px solid #c9d1e3; padding: 4px 6px; text-transform: uppercase; letter-spacing: .04em; }
+  td { padding: 4px 6px; border-bottom: 1px solid #e3e7ee; vertical-align: top; }
+  .n { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .e { color: var(--verde); } .s { color: var(--verm); }
+  .ant td, .tot td { background: var(--claro); font-weight: 700; }
+  .resumo td { padding: 6px; }
+  .obs { color: var(--cinza); font-size: 11px; }
+  .ass { display: flex; gap: 40px; margin-top: 40px; }
+  .ass div { flex: 1; border-top: 1px solid #1b2340; text-align: center; padding-top: 4px; }
+  .acoes { max-width: 980px; margin: 14px auto 0; text-align: right; }
+  .acoes button { font: inherit; font-weight: 600; background: var(--navy); color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; cursor: pointer; }
+  .vazio { color: var(--cinza); font-style: italic; }
+  @media print { body { background: #fff; } .folha { margin: 0; border: 0; padding: 0; } .acoes { display: none; } h2 { -webkit-print-color-adjust: exact; print-color-adjust: exact; } .ant td, .tot td { -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
+</style>
+</head>
+<body>
+<div class="acoes"><button onclick="window.print()">Imprimir ou salvar em PDF</button></div>
+<div class="folha">
+  <div class="topo">
+    <img src="{{ url_for('static', filename='img/logo-inj.png') }}" alt="Igreja do Nome de Jesus"/>
+    <div>
+      <h1>LIVRO CAIXA DO MÊS</h1>
+      <div class="sub">{{ cong['nome'] }} · {{ nome_mes | capitalize }} de {{ ano }}</div>
+    </div>
+    <div class="direita">Pastor: {{ cfg.get('nome_pastor') or '—' }}<br/>Tesoureiro: {{ cfg.get('nome_tesoureiro') or '—' }}<br/>
+      {% if fech %}Fechamento: {{ STATUS_FECH[fech['status']][0] }}{% else %}Mês ainda não fechado{% endif %}</div>
+  </div>
+
+  <h2>RESUMO</h2>
+  <table class="resumo">
+    <tr><th>Livro</th><th class="n">Saldo anterior</th><th class="n">Entradas</th><th class="n">Saídas</th><th class="n">Saldo final</th></tr>
+    {% for b in blocos %}
+    <tr><td>{{ b.rotulo if b.livro != 'FundoLocal' else 'Caixa local (Fundo Local)' }}</td><td class="n">{{ b.anterior | brl }}</td><td class="n e">{{ b.entradas | brl }}</td><td class="n s">{{ b.saidas | brl }}</td><td class="n"><b>{{ b.final | brl }}</b></td></tr>
+    {% endfor %}
+    <tr class="tot"><td>TOTAL</td><td class="n">{{ total_ant | brl }}</td><td class="n">{{ total_e | brl }}</td><td class="n">{{ total_s | brl }}</td><td class="n">{{ total_final | brl }}</td></tr>
+  </table>
+
+  {% if dizimos_mes %}
+  <h2>DÍZIMOS REGISTRADOS NO MÊS</h2>
+  <table>
+    <tr><th>Data</th><th>Observação</th><th class="n">Dízimo bruto</th></tr>
+    {% for d in dizimos_mes %}<tr><td>{{ d['data_registro'] or '' }}</td><td class="obs">{{ d['obs'] or '' }}</td><td class="n">{{ d['dizimo_bruto'] | brl }}</td></tr>{% endfor %}
+    <tr class="tot"><td colspan="2">Total de dízimos</td><td class="n">{{ dizimos_mes | sum(attribute='dizimo_bruto') | brl }}</td></tr>
+  </table>
+  {% endif %}
+
+  {% for b in blocos %}
+  <h2>{{ (b.rotulo if b.livro != 'FundoLocal' else 'Caixa local (Fundo Local)') | upper }}</h2>
+  <table>
+    <tr><th style="width:80px">Data</th><th>Descrição</th><th style="width:70px">Forma</th><th class="n">Entrada</th><th class="n">Saída</th><th class="n">Saldo</th></tr>
+    <tr class="ant"><td></td><td>Saldo anterior</td><td></td><td></td><td></td><td class="n">{{ b.anterior | brl }}</td></tr>
+    {% for l in b.linhas %}{% set t = l.t %}
+    <tr>
+      <td>{{ t['data_registro'] or '' }}</td>
+      <td>{{ t['item'] }}{% if t['obs'] %}<div class="obs">{{ t['obs'] }}</div>{% endif %}</td>
+      <td class="obs">{{ t['forma'] or '' }}</td>
+      <td class="n e">{% if t['tipo'] == 'Entrada' %}{{ t['valor'] | brl }}{% endif %}</td>
+      <td class="n s">{% if t['tipo'] == 'Saída' %}{{ t['valor'] | brl }}{% endif %}</td>
+      <td class="n">{{ l.saldo | brl }}</td>
+    </tr>
+    {% else %}
+    <tr><td></td><td class="vazio" colspan="5">Sem movimentação neste mês.</td></tr>
+    {% endfor %}
+    <tr class="tot"><td></td><td>Totais do mês</td><td></td><td class="n">{{ b.entradas | brl }}</td><td class="n">{{ b.saidas | brl }}</td><td class="n">{{ b.final | brl }}</td></tr>
+  </table>
+  {% endfor %}
+
+  <div class="ass"><div>Pastor<br/><b>{{ cfg.get('nome_pastor') or '' }}</b></div><div>Tesoureiro(a)<br/><b>{{ cfg.get('nome_tesoureiro') or '' }}</b></div></div>
+  <p class="obs" style="margin-top:14px">Gerado pelo sistema Tesouraria INJ em {{ now().strftime('%d/%m/%Y %H:%M') }}. O relatório dos envios à nacional sai em “Fechar o mês”.</p>
+</div>
+</body>
+</html>

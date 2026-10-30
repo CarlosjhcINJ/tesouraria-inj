@@ -25,7 +25,7 @@ app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
     SESSION_COOKIE_SAMESITE='Lax',
     SESSION_COOKIE_SECURE=os.environ.get('COOKIE_SECURE', '1' if db.IS_PG else '0') == '1',
-    PERMANENT_SESSION_LIFETIME=timedelta(hours=12),
+    PERMANENT_SESSION_LIFETIME=timedelta(hours=8),
     MAX_CONTENT_LENGTH=6 * 1024 * 1024,
 )
 
@@ -339,6 +339,41 @@ def csrf_token():
 
 
 app.jinja_env.globals['csrf_token'] = csrf_token
+
+
+MINUTOS_INATIVO = 30
+
+
+@app.before_request
+def sair_por_inatividade():
+    """Fecha a sessão depois de 30 minutos sem uso (celular esquecido, computador compartilhado)."""
+    if 'user_id' not in session or request.endpoint in ('static', 'login', 'privacidade'):
+        return None
+    agora = datetime.now(timezone.utc).timestamp()
+    ultimo = session.get('_ultimo', agora)
+    if agora - ultimo > MINUTOS_INATIVO * 60:
+        session.clear()
+        flash(f'Por segurança, a sessão foi encerrada após {MINUTOS_INATIVO} minutos sem uso. Entre de novo.', 'info')
+        return redirect(url_for('login'))
+    session['_ultimo'] = agora
+    return None
+
+
+@app.after_request
+def cabecalhos_seguranca(resp):
+    resp.headers.setdefault('X-Frame-Options', 'DENY')
+    resp.headers.setdefault('X-Content-Type-Options', 'nosniff')
+    resp.headers.setdefault('Referrer-Policy', 'same-origin')
+    if app.config.get('SESSION_COOKIE_SECURE'):
+        resp.headers.setdefault('Strict-Transport-Security', 'max-age=31536000')
+    if 'user_id' in session and request.endpoint != 'static':
+        resp.headers['Cache-Control'] = 'no-store'   # botão "voltar" não mostra dados depois de sair
+    return resp
+
+
+@app.route('/privacidade')
+def privacidade():
+    return render_template('privacidade.html')
 
 
 @app.before_request

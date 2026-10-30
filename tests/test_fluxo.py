@@ -432,3 +432,33 @@ def test_inicio_da_nacional_em_ordem(app):
                                     'Classificação e cartas anuais', 'Envios das congregações (todo mês', 'Histórico de alterações')]
     assert ordem == sorted(ordem)
     assert 'ABRIR UMA CONGREGAÇÃO' in pag
+
+
+def test_privacidade_isolamento_e_inatividade(app):
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+        vr = conn.execute("SELECT id FROM congregacoes WHERE nome='Vila Ramos/SP'").fetchone()['id']
+        t_vr = conn.execute("SELECT id FROM transacoes WHERE cong_id=? AND origem IS NULL ORDER BY id LIMIT 1", (vr,)).fetchone()['id']
+        d_vr = conn.execute("SELECT id FROM dizimos WHERE cong_id=? LIMIT 1", (vr,)).fetchone()['id']
+        f_vr = conn.execute("SELECT id FROM fechamentos WHERE cong_id=? LIMIT 1", (vr,)).fetchone()['id']
+    # sem login: nada aparece, só a tela de entrada e a página de privacidade
+    anon = app.test_client()
+    for url in ('/', f'/recibo/lancamento/{t_vr}', '/exportar/excel', f'/fechamento/{f_vr}/relatorio', '/nacional'):
+        r = anon.get(url)
+        assert r.status_code == 302 and '/login' in r.headers['Location'], url
+    assert 'Quem vê o quê' in anon.get('/privacidade').get_data(as_text=True)
+    # tesoureiro de outra congregação não vê nada de Vila Ramos
+    outro = entrar(app, 'pe.unico', 'pastor12345')
+    for url in (f'/recibo/lancamento/{t_vr}', f'/recibo/dizimo/{d_vr}', f'/lancamentos/{t_vr}/anexo', f'/fechamento/{f_vr}/relatorio'):
+        assert outro.get(url).status_code == 404, url
+    assert outro.get(f'/lancamentos/{t_vr}/editar').status_code == 302
+    assert 'Vila Ramos' not in outro.get('/lancamentos?ano=2026').get_data(as_text=True)
+    assert outro.get('/nacional').status_code in (302, 403)
+    # cabeçalhos e saída automática após 30 minutos
+    r = outro.get('/')
+    assert r.headers['X-Frame-Options'] == 'DENY' and r.headers['Cache-Control'] == 'no-store'
+    with outro.session_transaction() as s:
+        s['_ultimo'] = s['_ultimo'] - 31 * 60
+    r = outro.get('/')
+    assert r.status_code == 302 and '/login' in r.headers['Location']
+    assert outro.get('/').headers['Location'].endswith('/login') or '/login' in outro.get('/').headers['Location']

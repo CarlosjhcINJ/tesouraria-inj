@@ -470,8 +470,11 @@ def cadastro_falta(conn, cid, ano, cfg=None):
     falta = []
     if not cfg.get('nome_pastor') or not cfg.get('nome_tesoureiro'):
         falta.append('os nomes do pastor e do tesoureiro')
-    if not conn.execute('SELECT 1 FROM compromissos WHERE cong_id=? AND ano=?', (cid, ano)).fetchone():
+    comp = conn.execute('SELECT confirmado_em FROM compromissos WHERE cong_id=? AND ano=?', (cid, ano)).fetchone()
+    if not comp:
         falta.append(f'os dízimos do ano anterior (para definir a classificação e a liquidação de {ano})')
+    elif not comp['confirmado_em']:
+        falta.append(f'a confirmação do pastor na configuração de {ano}')
     return falta
 
 
@@ -736,8 +739,6 @@ def dashboard():
                                 (cid,)).fetchall()
         comp = conn.execute('SELECT * FROM compromissos WHERE cong_id=? AND ano=?', (cid, ano)).fetchone()
         falta = cadastro_falta(conn, cid, ano, cfg)
-    if comp and not comp['confirmado_em']:
-        falta.append(f'a confirmação do pastor nas porcentagens de {ano}')
     saldo_ant = float(cfg.get('saldo_ano_anterior', 0) or 0)
     return render_template('inicio.html', falta=falta, comp=comp, cfg=cfg, ano=ano, mes=mes, nome_mes=nome_mes, anos=ANOS,
                            ent_mes=ent_mes, sai_mes=sai_mes, diz_mes=diz_mes, saldo=saldo_ant + ent_ano - sai_ano,

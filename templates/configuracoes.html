@@ -13,7 +13,7 @@
   <span class="passo {{ 'feito' if cfg.get('nome_pastor') and cfg.get('nome_tesoureiro') else 'atual' }}">1. Responsáveis</span>
   <span class="passo {{ 'feito' if comp else ('atual' if cfg.get('nome_pastor') else '') }}">2. Dízimos do ano anterior → classificação</span>
   <span class="passo {{ 'feito' if comp and comp['confirmado_em'] else ('atual' if comp else '') }}">3. Pastor confirma</span>
-  <span class="passo {{ 'feito' if comp else '' }}">4. Liberado para lançar</span>
+  <span class="passo {{ 'feito' if comp and comp['confirmado_em'] else '' }}">4. Liberado para lançar</span>
 </div>
 
 <div class="row g-4">
@@ -76,7 +76,7 @@
         <div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>Confirmada pelo pastor em {{ comp['confirmado_em'] | data }}.
           {% if travado %}Para mudar, fale com a Tesouraria Nacional.{% endif %}</div>
         {% else %}
-        <div class="alert alert-warning py-2 small"><i class="bi bi-hourglass-split me-1"></i>{{ comp['observacao'] or 'Emitida' }}. Falta o pastor confirmar
+        <div class="alert alert-warning py-2 small"><i class="bi bi-hourglass-split me-1"></i>{{ comp['observacao'] or 'Emitida' }}. <b>Os lançamentos só são liberados depois que o pastor confirmar.</b> Falta o pastor confirmar
           {% if e_papel('pastor') %}— ao salvar abaixo, você confirma.{% else %}(o pastor entra e salva esta tela, ou confirma na <a href="{{ url_for('carta', ano=ano) }}">carta anual</a>).{% endif %}</div>
         {% endif %}
       {% endif %}

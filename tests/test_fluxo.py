@@ -337,6 +337,12 @@ def test_cadastro_obrigatorio_livro_excel_e_tutorial(app):
     with appmod.get_db() as conn:
         c = conn.execute("SELECT c.* FROM compromissos c JOIN congregacoes g ON g.id=c.cong_id WHERE g.nome='Nova Esperança'").fetchone()
         assert c['categoria'] == 'nova' and c['fundo_local_pct'] == 0
+    # salvo pelo tesoureiro, ainda não liberado: falta o pastor confirmar
+    r = tes.get('/lancar?tipo=Saída')
+    assert '/configuracoes' in r.headers['Location']
+    pas = entrar(app, 'ne.pas', 'pastor12345')
+    assert 'Calcular, salvar e confirmar' in pas.get('/configuracoes').get_data(as_text=True)
+    pas.post('/configuracoes', data={'acao': 'porcentagens', 'ano': date.today().year})
     pag = tes.get('/lancar?tipo=Saída').get_data(as_text=True)
     assert 'Em qual <b>livro</b>' in pag and 'livro-escolha' in pag
     # exportação

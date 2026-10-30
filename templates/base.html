@@ -29,17 +29,33 @@
 
   <nav class="sidebar-nav">
     {% set ep = request.endpoint %}
-    {% if session.get('papel') in ('admin','supervisor') and lista_congregacoes %}
-    <div class="px-3 pt-3">
-      <select class="form-select form-select-sm" onchange="if(this.value) location.href=this.value">
-        <option value="{{ url_for('ver_nacional') }}" {% if not session.get('cong_id') %}selected{% endif %}>Tesouraria Nacional</option>
+    {% if session.get('papel') in ('admin','supervisor') %}
+    <div class="nav-section">TESOURARIA NACIONAL</div>
+    <a href="{{ url_for('ver_nacional') }}" class="nav-item {% if ep == 'nacional_inicio' %}active{% endif %}"><i class="bi bi-house"></i> Início da nacional</a>
+    <a href="{{ url_for('tutorial') }}" class="nav-item {% if ep == 'tutorial' %}active{% endif %}"><i class="bi bi-book"></i> Como funciona (tutorial)</a>
+    {% if session.get('papel') == 'admin' %}
+    <a href="{{ url_for('admin') }}" class="nav-item {% if ep in ('admin','admin_nova_cong') %}active{% endif %}"><i class="bi bi-people"></i> 1. Congregações e usuários</a>
+    <a href="{{ url_for('nacional_regras') }}" class="nav-item {% if ep == 'nacional_regras' %}active{% endif %}"><i class="bi bi-sliders"></i> 2. Regras e conta</a>
+    <a href="{{ url_for('nacional_cartas') }}" class="nav-item {% if ep == 'nacional_cartas' %}active{% endif %}"><i class="bi bi-envelope-paper"></i> 3. Cartas anuais</a>
+    {% endif %}
+    <a href="{{ url_for('nacional_envios') }}" class="nav-item {% if ep == 'nacional_envios' %}active{% endif %}"><i class="bi bi-inboxes"></i> 4. Envios das congregações</a>
+    {% if session.get('papel') == 'admin' %}
+    <a href="{{ url_for('nacional_auditoria') }}" class="nav-item {% if ep == 'nacional_auditoria' %}active{% endif %}"><i class="bi bi-clock-history"></i> 5. Histórico de alterações</a>
+    {% endif %}
+    {% if lista_congregacoes %}
+    <div class="nav-section mt-2">ABRIR UMA CONGREGAÇÃO</div>
+    <div class="px-3 pb-1">
+      <select class="form-select form-select-sm" onchange="if(this.value) location.href=this.value" aria-label="Abrir a tesouraria de uma congregação">
+        <option value="{{ url_for('ver_nacional') }}" {% if not session.get('cong_id') %}selected{% endif %}>— escolha a congregação —</option>
         {% for c in lista_congregacoes %}<option value="{{ url_for('ver_congregacao', cid=c['id']) }}" {% if session.get('cong_id') == c['id'] %}selected{% endif %}>{{ c['nome'] }}</option>{% endfor %}
       </select>
     </div>
     {% endif %}
+    {% endif %}
     {% if session.get('cong_id') %}
-    <div class="nav-section">TESOURARIA LOCAL</div>
+    <div class="nav-section mt-2">TESOURARIA LOCAL{% if session.get('papel') in ('admin','supervisor') %} · {{ session.get('cong_nome') }}{% endif %}</div>
     <a href="{{ url_for('dashboard') }}" class="nav-item {% if ep == 'dashboard' %}active{% endif %}"><i class="bi bi-house"></i> Início</a>
+    {% if session.get('papel') not in ('admin','supervisor') %}<a href="{{ url_for('tutorial') }}" class="nav-item {% if ep == 'tutorial' %}active{% endif %}"><i class="bi bi-book"></i> Como usar (tutorial)</a>{% endif %}
     <a href="{{ url_for('configuracoes') }}" class="nav-item {% if ep == 'configuracoes' %}active{% endif %}"><i class="bi bi-person-vcard"></i> 1º Cadastro da congregação</a>
     <a href="{{ url_for('orcamento') }}" class="nav-item {% if ep == 'orcamento' %}active{% endif %}"><i class="bi bi-pie-chart"></i> Orçamento</a>
     <a href="{{ url_for('lancar', tipo='Entrada') }}" class="nav-item {% if ep == 'lancar' and request.args.get('tipo') == 'Entrada' %}active{% endif %}"><i class="bi bi-arrow-down-circle"></i> Registrar entrada</a>
@@ -59,19 +75,8 @@
     <a href="{{ url_for('visao_geral') }}" class="nav-item {% if ep == 'visao_geral' %}active{% endif %}"><i class="bi bi-graph-up"></i> Gráficos do ano</a>
     <a href="{{ url_for('carta') }}" class="nav-item {% if ep == 'carta' %}active{% endif %}"><i class="bi bi-envelope-paper"></i> Carta anual</a>
     {% endif %}
-    {% if session.get('papel') in ('admin','supervisor') %}
-    <div class="nav-section">TESOURARIA NACIONAL</div>
-    <a href="{{ url_for('nacional_envios') }}" class="nav-item {% if ep == 'nacional_envios' %}active{% endif %}"><i class="bi bi-inboxes"></i> Envios das congregações</a>
-    {% if session.get('papel') == 'admin' %}
-    <a href="{{ url_for('nacional_cartas') }}" class="nav-item {% if ep == 'nacional_cartas' %}active{% endif %}"><i class="bi bi-envelope-paper"></i> Cartas anuais</a>
-    <a href="{{ url_for('nacional_regras') }}" class="nav-item {% if ep == 'nacional_regras' %}active{% endif %}"><i class="bi bi-sliders"></i> Regras e conta</a>
-    <a href="{{ url_for('admin') }}" class="nav-item {% if ep in ('admin','admin_nova_cong') %}active{% endif %}"><i class="bi bi-people"></i> Congregações e usuários</a>
-    <a href="{{ url_for('nacional_auditoria') }}" class="nav-item {% if ep == 'nacional_auditoria' %}active{% endif %}"><i class="bi bi-clock-history"></i> Histórico de alterações</a>
-    {% endif %}
-    {% endif %}
     <div class="nav-section mt-2">SISTEMA</div>
     <a href="{{ url_for('minha_conta') }}" class="nav-item {% if ep == 'minha_conta' %}active{% endif %}"><i class="bi bi-person-gear"></i> Minha conta</a>
-    <a href="{{ url_for('tutorial') }}" class="nav-item {% if ep == 'tutorial' %}active{% endif %}"><i class="bi bi-book"></i> Tutorial</a>
   </nav>
 
   <div class="sidebar-footer">

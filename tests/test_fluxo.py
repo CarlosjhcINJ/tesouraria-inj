@@ -417,3 +417,18 @@ def test_pastor_tesoureiro_um_so_usuario(app):
     assert um.get('/lancar?tipo=Saída').status_code == 200
     # e aparece o olho de senha nas telas
     assert 'senha.js' in um.get('/minha-conta').get_data(as_text=True)
+
+
+def test_inicio_da_nacional_em_ordem(app):
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    adm = entrar(app, 'nacional', 'senha-forte-123')
+    adm.get('/ver/nacional')
+    r = adm.get('/inicio')
+    assert '/nacional' in r.headers['Location'] and '/nacional/envios' not in r.headers['Location']
+    pag = adm.get('/nacional').get_data(as_text=True)
+    corpo = pag[pag.index('O trabalho da nacional'):]
+    ordem = [corpo.index(t) for t in ('Como o sistema funciona', 'Congregações e usuários', 'Regras e conta nacional',
+                                    'Classificação e cartas anuais', 'Envios das congregações (todo mês', 'Histórico de alterações')]
+    assert ordem == sorted(ordem)
+    assert 'ABRIR UMA CONGREGAÇÃO' in pag

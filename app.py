@@ -639,7 +639,7 @@ def ver_congregacao(cid):
 def ver_nacional():
     session['cong_id'] = None
     session['cong_nome'] = 'Tesouraria Nacional'
-    return redirect(url_for('nacional_envios'))
+    return redirect(url_for('nacional_inicio'))
 
 
 @app.context_processor
@@ -659,7 +659,7 @@ def ctx_congregacoes():
 def inicio():
     if session.get('cong_id'):
         return redirect(url_for('dashboard'))
-    return redirect(url_for('nacional_envios'))
+    return redirect(url_for('nacional_inicio'))
 
 
 # ═════════════════════════════════════════════
@@ -1723,6 +1723,32 @@ def api_categorias(livro, tipo):
 # ═════════════════════════════════════════════
 #  TESOURARIA NACIONAL
 # ═════════════════════════════════════════════
+@app.route('/nacional')
+@papel_required('admin', 'supervisor')
+def nacional_inicio():
+    """Página inicial da Tesouraria Nacional: o trabalho na ordem lógica."""
+    hoje = date.today()
+    ano = hoje.year
+    ref_ano, ref_mes = (ano, hoje.month - 1) if hoje.month > 1 else (ano - 1, 12)
+    with get_db() as conn:
+        congs = conn.execute('SELECT * FROM congregacoes WHERE ativo=1 ORDER BY nome').fetchall()
+        n_users = conn.execute("SELECT COUNT(*) AS n FROM usuarios WHERE cong_id IS NOT NULL AND ativo=1").fetchone()['n']
+        comps = conn.execute('SELECT confirmado_em FROM compromissos c JOIN congregacoes g ON g.id=c.cong_id '
+                             'WHERE g.ativo=1 AND c.ano=?', (ano,)).fetchall()
+        prox = conn.execute('SELECT COUNT(*) AS n FROM compromissos c JOIN congregacoes g ON g.id=c.cong_id '
+                            'WHERE g.ativo=1 AND c.ano=?', (ano + 1,)).fetchone()['n']
+        fechs = {f['cong_id']: f['status'] for f in conn.execute(
+            'SELECT cong_id, status FROM fechamentos WHERE ano=? AND mes=?', (ref_ano, ref_mes)).fetchall()}
+        reg = regras_em(conn)
+        n_hist = conn.execute('SELECT COUNT(*) AS n FROM auditoria').fetchone()['n']
+    enviados = sum(1 for c in congs if fechs.get(c['id']) in ('enviado', 'recebido'))
+    a_conferir = sum(1 for c in congs if fechs.get(c['id']) == 'enviado')
+    return render_template('nacional_inicio.html', cfg=get_cfg(), congs=congs, n_users=n_users, ano=ano,
+                           n_comp=len(comps), n_conf=sum(1 for c in comps if c['confirmado_em']), prox=prox,
+                           ref_nome=f'{MESES[ref_mes - 1]}/{ref_ano}', enviados=enviados, a_conferir=a_conferir,
+                           pendentes=len(congs) - enviados, reg=reg, n_hist=n_hist, nacional=config_nacional())
+
+
 @app.route('/nacional/envios')
 @papel_required('admin', 'supervisor')
 def nacional_envios():

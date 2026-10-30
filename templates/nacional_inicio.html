@@ -1,0 +1,76 @@
+{% extends 'base.html' %}
+{% block title %}Tesouraria Nacional — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Tesouraria Nacional</li>{% endblock %}
+
+{% block content %}
+<div class="mb-3">
+  <h1 class="page-title mb-0">Tesouraria Nacional</h1>
+  <p class="text-muted mb-0">O trabalho da nacional, na ordem: primeiro entender o sistema, depois cadastrar, definir as regras, emitir as cartas e acompanhar os envios.</p>
+</div>
+
+{% if not congs and papel == 'admin' %}
+<div class="alert alert-warning d-flex align-items-center gap-2"><i class="bi bi-flag fs-5"></i>
+  <div><b>Primeiro uso:</b> ainda não há congregações. Siga os passos 0 e 1 abaixo.</div></div>
+{% endif %}
+
+<!-- 0. Como funciona -->
+<a href="{{ url_for('tutorial') }}" class="guia mb-3">
+  <span class="guia-num" style="background:#2980b9">0</span>
+  <span class="guia-txt"><b><i class="bi bi-book me-1"></i>Como o sistema funciona (tutorial)</b>
+    <small>Leia antes de ensinar o tesoureiro: a ordem do trabalho, passo a passo, com o que cada um faz.</small></span>
+  <i class="bi bi-chevron-right"></i>
+</a>
+
+{% if papel == 'admin' %}
+<!-- 1. Congregações -->
+<a href="{{ url_for('admin') if congs else url_for('admin_nova_cong') }}" class="guia {{ 'guia-entrada guia-grande' if not congs else '' }} mb-3">
+  <span class="guia-num">1</span>
+  <span class="guia-txt"><b><i class="bi bi-people me-1"></i>{{ 'Cadastrar a primeira congregação' if not congs else 'Congregações e usuários' }}</b>
+    <small>{% if congs %}{{ congs | length }} congregação(ões) e {{ n_users }} usuário(s) locais. Criar congregação, tesoureiro e pastor; trocar senha; desativar quem saiu.{% else %}Cadastre a congregação com o tesoureiro e o pastor (ou um só usuário, se o pastor também for o tesoureiro).{% endif %}</small></span>
+  <i class="bi bi-chevron-right"></i>
+</a>
+
+<!-- 2. Regras -->
+<a href="{{ url_for('nacional_regras') }}" class="guia mb-3">
+  <span class="guia-num">2</span>
+  <span class="guia-txt"><b><i class="bi bi-sliders me-1"></i>Regras e conta nacional</b>
+    <small>Salário mínimo vigente: {{ reg.get('salario_minimo', 0) | brl }} · Dízimo dos Dízimos {{ '%.0f' | format(reg.get('pct_dizimo_dizimos', 0) * 100) }}% · conta {{ nacional.get('banco', '') }}. Mude só quando o Regulamento ou o salário mínimo mudar.</small></span>
+  <i class="bi bi-chevron-right"></i>
+</a>
+
+<!-- 3. Cartas -->
+<a href="{{ url_for('nacional_cartas') }}" class="guia mb-3">
+  <span class="guia-num">3</span>
+  <span class="guia-txt"><b><i class="bi bi-envelope-paper me-1"></i>Classificação e cartas anuais</b>
+    <small>{{ ano }}: {{ n_conf }} de {{ congs | length }} congregações com classificação confirmada pelo pastor{% if n_comp > n_conf %} ({{ n_comp - n_conf }} aguardando confirmação){% endif %}. {{ ano + 1 }}: {{ prox }} carta(s) emitida(s) — emitir em novembro.</small></span>
+  <i class="bi bi-chevron-right"></i>
+</a>
+{% endif %}
+
+<!-- 4. Envios -->
+<a href="{{ url_for('nacional_envios') }}" class="guia {{ 'guia-saida' if pendentes and congs else '' }} mb-3">
+  <span class="guia-num">4</span>
+  <span class="guia-txt"><b><i class="bi bi-inboxes me-1"></i>Envios das congregações (todo mês, a partir do dia 5)</b>
+    <small>{% if congs %}{{ ref_nome | capitalize }}: {{ enviados }} de {{ congs | length }} enviaram{% if a_conferir %} · {{ a_conferir }} para conferir e marcar como recebido{% endif %}{% if pendentes %} · {{ pendentes }} ainda não enviaram{% endif %}.{% else %}Aparece quando houver congregações.{% endif %}</small></span>
+  <i class="bi bi-chevron-right"></i>
+</a>
+
+{% if papel == 'admin' %}
+<!-- 5. Histórico -->
+<a href="{{ url_for('nacional_auditoria') }}" class="guia mb-4">
+  <span class="guia-num">5</span>
+  <span class="guia-txt"><b><i class="bi bi-clock-history me-1"></i>Histórico de alterações</b>
+    <small>{{ n_hist }} registro(s): quem alterou ou excluiu o quê, e quando. Use para conferir quando algo não bater.</small></span>
+  <i class="bi bi-chevron-right"></i>
+</a>
+{% endif %}
+
+{% if congs %}
+<div class="table-card">
+  <div class="table-header"><h6 class="mb-0"><i class="bi bi-box-arrow-in-right me-2 text-primary"></i>Abrir a tesouraria de uma congregação</h6></div>
+  <div class="p-3 d-flex flex-wrap gap-2">
+    {% for c in congs %}<a href="{{ url_for('ver_congregacao', cid=c['id']) }}" class="btn btn-sm btn-outline-primary">{{ c['nome'] }}</a>{% endfor %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

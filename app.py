@@ -127,7 +127,8 @@ CATEGORIAS = {
 
 ORC_GRUPOS = _orc_grupos()
 
-PAPEIS = {'tesoureiro': 'Tesoureiro(a)', 'pastor': 'Pastor', 'admin': 'Tesouraria Nacional',
+PAPEIS = {'tesoureiro': 'Tesoureiro(a)', 'pastor': 'Pastor', 'pastor_tesoureiro': 'Pastor e tesoureiro (um só usuário)',
+          'admin': 'Tesouraria Nacional',
           'supervisor': 'Supervisor (consulta)'}
 STATUS_FECH = {
     'fechado': ('Aguardando aprovação do pastor', 'warning'),
@@ -367,6 +368,15 @@ def login_required(f):
     return wrapper
 
 
+def tem_papel(p):
+    """Pastor que também é tesoureiro (congregação pequena) tem os dois papéis num só usuário."""
+    atual = session.get('papel')
+    return atual == p or (atual == 'pastor_tesoureiro' and p in ('pastor', 'tesoureiro'))
+
+
+app.jinja_env.globals['e_papel'] = tem_papel
+
+
 def papel_required(*papeis):
     def deco(f):
         @wraps(f)
@@ -374,7 +384,7 @@ def papel_required(*papeis):
             if not session.get('user_id'):
                 return redirect(url_for('login', next=request.path))
             admin_na_cong = session.get('papel') == 'admin' and session.get('cong_id') and 'tesoureiro' in papeis
-            if session.get('papel') not in papeis and not admin_na_cong:
+            if not any(tem_papel(p) for p in papeis) and not admin_na_cong:
                 flash('Você não tem permissão para esta página.', 'danger')
                 return redirect(url_for('inicio'))
             return f(*a, **kw)
@@ -395,7 +405,7 @@ def cong_required(f):
 
 
 def pode_editar():
-    return session.get('papel') == 'tesoureiro' or (session.get('papel') == 'admin' and bool(session.get('cong_id')))
+    return tem_papel('tesoureiro') or (session.get('papel') == 'admin' and bool(session.get('cong_id')))
 
 
 def get_cong_id():
@@ -1478,7 +1488,7 @@ def orcamento():
     cid = get_cong_id()
     ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
     if request.method == 'POST':
-        if session.get('papel') not in ('tesoureiro', 'pastor'):
+        if not (tem_papel('tesoureiro') or tem_papel('pastor')):
             abort(403)
         items = request.form.getlist('item[]')
         tipos = request.form.getlist('tipo[]')
@@ -1588,7 +1598,7 @@ def configuracoes():
     """Configurar a congregação: responsáveis (saem nos livros, recibos e relatórios) e porcentagens do ano."""
     cid = get_cong_id()
     papel = session.get('papel')
-    pode = papel in ('tesoureiro', 'pastor') or (papel == 'admin' and cid)
+    pode = tem_papel('tesoureiro') or tem_papel('pastor') or (papel == 'admin' and cid)
     cfg = get_cfg()
     ano = int(request.values.get('ano', cfg.get('ano_atual') or date.today().year))
     if request.method == 'POST':
@@ -1632,7 +1642,7 @@ def configuracoes():
                              'ON CONFLICT (cong_id, key) DO UPDATE SET value=excluded.value',
                              (cid, f'base_carta_{ano}', json.dumps(vals)))
                 obs = 'Ajustada pela Tesouraria Nacional' if papel == 'admin' else 'Calculada pelo cadastro da congregação'
-                conf_por = session['user_id'] if papel == 'pastor' else None
+                conf_por = session['user_id'] if tem_papel('pastor') else None
                 conn.execute('''INSERT INTO compromissos (cong_id, ano, categoria, nivelacao, fundo_local_pct, betel, media, meses,
                                 salario_minimo, observacao, emitido_por, emitido_em, confirmado_por, confirmado_em)
                                 VALUES (?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,?,?)
@@ -1930,9 +1940,13 @@ def admin_nova_cong():
                 for k, v in padrao.items():
                     conn.execute('INSERT INTO config (cong_id, key, value) VALUES (?,?,?) ON CONFLICT (cong_id, key) DO NOTHING',
                                  (cid, k, v))
+                unico = request.form.get('usuario_unico') == '1'
                 _novo_usuario(conn, cid, request.form.get('tes_nome', ''), request.form['tes_usuario'],
-                              request.form['tes_senha'], 'tesoureiro')
-                if request.form.get('pas_usuario'):
+                              request.form['tes_senha'], 'pastor_tesoureiro' if unico else 'tesoureiro')
+                if unico:
+                    padrao['nome_pastor'] = padrao['nome_tesoureiro']
+                    conn.execute("UPDATE config SET value=? WHERE cong_id=? AND key='nome_pastor'", (padrao['nome_tesoureiro'], cid))
+                if not unico and request.form.get('pas_usuario'):
                     _novo_usuario(conn, cid, request.form.get('pas_nome', ''), request.form['pas_usuario'],
                                   request.form['pas_senha'], 'pastor')
                 auditar(conn, 'admin.nova_congregacao', nome, cong_id=cid)
@@ -1950,7 +1964,7 @@ def admin_novo_usuario():
     if papel not in PAPEIS:
         abort(400)
     cid = request.form.get('cong_id') or None
-    if papel in ('tesoureiro', 'pastor') and not cid:
+    if papel in ('tesoureiro', 'pastor', 'pastor_tesoureiro') and not cid:
         flash('Tesoureiro e pastor precisam estar ligados a uma congregação.', 'danger')
         return redirect(url_for('admin'))
     if papel in ('admin', 'supervisor'):

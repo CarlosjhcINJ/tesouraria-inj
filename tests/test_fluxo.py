@@ -391,3 +391,29 @@ def test_nacional_renomeia_usuario_e_abre_congregacao(app):
     with appmod.get_db() as conn:
         conn.execute("UPDATE usuarios SET usuario='jt.tes' WHERE nome='Ana'")
         conn.execute("UPDATE usuarios SET usuario='nacional' WHERE usuario='tesouraria.nacional'")
+
+
+def test_pastor_tesoureiro_um_so_usuario(app):
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    adm = entrar(app, 'nacional', 'senha-forte-123')
+    adm.post('/admin/nova', data={'nome': 'Pequena Esperança', 'usuario_unico': '1', 'tes_nome': 'Pr. Paulo Lima',
+                                  'tes_usuario': 'pe.unico', 'tes_senha': 'pastor12345'})
+    with appmod.get_db() as conn:
+        u = conn.execute("SELECT * FROM usuarios WHERE usuario='pe.unico'").fetchone()
+        assert u['papel'] == 'pastor_tesoureiro'
+        assert not conn.execute("SELECT 1 FROM usuarios WHERE cong_id=? AND usuario<>'pe.unico'", (u['cong_id'],)).fetchone()
+    um = entrar(app, 'pe.unico', 'pastor12345')
+    cfg = um.get('/configuracoes').get_data(as_text=True)
+    assert 'Pr. Paulo Lima' in cfg and 'Calcular, salvar e confirmar' in cfg
+    ano = date.today().year
+    um.post('/configuracoes', data={'acao': 'porcentagens', 'ano': ano})       # salva e já confirma (é o pastor)
+    with appmod.get_db() as conn:
+        c = conn.execute('SELECT * FROM compromissos WHERE cong_id=? AND ano=?', (u['cong_id'], ano)).fetchone()
+        assert c['confirmado_em']
+    # lança como tesoureiro
+    r = um.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Entrada', 'item': 'Votos', 'valor': '50', 'mes': 'janeiro', 'ano': ano})
+    assert r.status_code == 302 and '/configuracoes' not in r.headers['Location']
+    assert um.get('/lancar?tipo=Saída').status_code == 200
+    # e aparece o olho de senha nas telas
+    assert 'senha.js' in um.get('/minha-conta').get_data(as_text=True)

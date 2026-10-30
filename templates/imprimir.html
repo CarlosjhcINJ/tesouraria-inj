@@ -1,0 +1,89 @@
+{% extends 'base.html' %}
+{% block title %}Imprimir — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Imprimir</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h1 class="page-title mb-0">Imprimir</h1>
+    <p class="text-muted mb-0 small">Livros, balanço, relatório dos envios e recibos. Tudo sai com a logo e os nomes do pastor e do tesoureiro.</p>
+  </div>
+  <form class="d-flex gap-2">
+    <select name="mes" class="form-select form-select-sm" style="width:140px" onchange="this.form.submit()">
+      {% for m in MESES %}<option value="{{ loop.index }}" {% if loop.index == mes %}selected{% endif %}>{{ m | capitalize }}</option>{% endfor %}
+    </select>
+    <select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
+      {% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+
+{% if not cfg.get('nome_pastor') or not cfg.get('nome_tesoureiro') %}
+<div class="alert alert-warning small"><i class="bi bi-exclamation-triangle me-1"></i>Os nomes do pastor e do tesoureiro ainda não foram cadastrados.
+  <a href="{{ url_for('configuracoes') }}">Cadastrar agora</a> para saírem nas folhas.</div>
+{% endif %}
+
+<div class="row g-3">
+  <!-- Livros do mês -->
+  <div class="col-lg-6">
+    <div class="form-card h-100">
+      <div class="form-section-title"><i class="bi bi-journal-text me-2"></i>Livros de {{ MESES[mes-1] }}/{{ ano }}</div>
+      <a target="_blank" href="{{ url_for('livro_do_mes', ano=ano, mes=mes) }}" class="btn btn-primary w-100 mb-2"><i class="bi bi-printer me-2"></i>Livro caixa completo do mês</a>
+      <div class="d-flex flex-wrap gap-2">
+        {% for lv in livros %}<a target="_blank" href="{{ url_for('livro_do_mes', ano=ano, mes=mes, livro=lv) }}" class="btn btn-sm btn-outline-primary">{{ livro_nome[lv] }}</a>{% endfor %}
+      </div>
+    </div>
+  </div>
+  <!-- Livros do ano -->
+  <div class="col-lg-6">
+    <div class="form-card h-100">
+      <div class="form-section-title"><i class="bi bi-journals me-2"></i>Livros do ano {{ ano }}</div>
+      <a target="_blank" href="{{ url_for('livro_do_mes', ano=ano, periodo='ano') }}" class="btn btn-primary w-100 mb-2"><i class="bi bi-printer me-2"></i>Livro caixa completo do ano</a>
+      <div class="d-flex flex-wrap gap-2">
+        {% for lv in livros %}<a target="_blank" href="{{ url_for('livro_do_mes', ano=ano, periodo='ano', livro=lv) }}" class="btn btn-sm btn-outline-primary">{{ livro_nome[lv] }}</a>{% endfor %}
+      </div>
+    </div>
+  </div>
+  <!-- Balanço -->
+  <div class="col-lg-6">
+    <div class="form-card h-100">
+      <div class="form-section-title"><i class="bi bi-clipboard-data me-2"></i>Balanço com gráficos</div>
+      <div class="d-flex gap-2">
+        <a href="{{ url_for('balanco', ano=ano, mes=mes) }}" class="btn btn-outline-primary flex-fill">Balanço de {{ MESES[mes-1] }}</a>
+        <a href="{{ url_for('balanco', ano=ano) }}" class="btn btn-outline-primary flex-fill">Balanço do ano</a>
+      </div>
+    </div>
+  </div>
+  <!-- Relatório dos envios -->
+  <div class="col-lg-6">
+    <div class="form-card h-100">
+      <div class="form-section-title"><i class="bi bi-send me-2"></i>Relatório dos envios à nacional ({{ ano }})</div>
+      {% if fechs %}
+      <div class="d-flex flex-wrap gap-2">
+        {% for f in fechs %}<a target="_blank" href="{{ url_for('fechamento_relatorio', fid=f['id']) }}" class="btn btn-sm btn-outline-primary">{{ MESES[f['mes']-1][:3] | capitalize }} · {{ f['total'] | brl }}</a>{% endfor %}
+      </div>
+      {% else %}
+      <p class="small text-muted mb-2">O relatório sai quando o mês é fechado.</p>
+      <a href="{{ url_for('fechamento', ano=ano, mes=mes) }}" class="btn btn-sm btn-outline-secondary">Ir para Fechar o mês</a>
+      {% endif %}
+    </div>
+  </div>
+  <!-- Recibos -->
+  <div class="col-12">
+    <div class="table-card">
+      <div class="table-header d-flex justify-content-between"><h6 class="mb-0"><i class="bi bi-receipt me-2 text-primary"></i>Recibos dos últimos lançamentos</h6>
+        <a href="{{ url_for('lancamentos', ano=ano) }}" class="small">Todos os lançamentos</a></div>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+        {% for t in recentes %}
+        <tr>
+          <td class="small text-muted">{{ t['data_registro'] or '' }}</td>
+          <td class="small">{{ t['item'] }}{% if t['pessoa'] %} · {{ t['pessoa'] }}{% endif %}</td>
+          <td class="text-end fw-semibold {{ 'text-entrada' if t['tipo']=='Entrada' else 'text-saida' }}">{{ '+' if t['tipo']=='Entrada' else '−' }} {{ t['valor'] | brl }}</td>
+          <td class="text-end"><a target="_blank" href="{{ url_for('recibo', tipo='lancamento', rid=t['id']) }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-receipt"></i> Recibo</a></td>
+        </tr>
+        {% else %}<tr><td class="text-muted text-center py-3">Nenhum lançamento ainda.</td></tr>{% endfor %}
+      </table></div>
+    </div>
+  </div>
+</div>
+{% endblock %}

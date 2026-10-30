@@ -392,3 +392,29 @@ body {
 .guia-dizimo { border-left: 5px solid #2980b9; }
 .livro-card { display: block; background: #fff; border: 1px solid #e3e7ee; border-radius: 12px; padding: 12px 14px; text-decoration: none; color: #1b2340; box-shadow: var(--card-shadow); }
 .livro-card:hover { border-color: #1a5276; color: #1b2340; }
+
+/* ── Configuração, balanço e impressão ── */
+.calc-box { background: #f6f8fc; border: 1px solid #e3e7ee; border-radius: 10px; padding: 10px 14px; }
+.barra { height: 8px; background: #eef1f5; border-radius: 999px; overflow: hidden; }
+.barra span { display: block; height: 100%; border-radius: 999px; }
+.so-impressao { display: none; }
+.aviso-config { border-left: 5px solid #f39c12; }
+.guia-grande { padding: 24px 22px; min-height: 120px; }
+.guia-grande b { font-size: 1.35rem; }
+.guia-grande .bi-arrow-down-circle-fill, .guia-grande .bi-arrow-up-circle-fill { font-size: 2.6rem; }
+.guia-entrada.guia-grande { background: linear-gradient(90deg, #eafaf1, #fff 70%); }
+.guia-saida.guia-grande { background: linear-gradient(90deg, #fdedec, #fff 70%); }
+.comece { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7f8c9a; }
+@media print {
+  .sidebar, .topbar, .nao-imprimir, .alert, .btn { display: none !important; }
+  .main-content { margin: 0 !important; padding: 0 !important; }
+  .page-content { padding: 0 !important; }
+  body { background: #fff !important; }
+  .so-impressao { display: flex !important; }
+  .topo-impressao { align-items: center; gap: 14px; border-bottom: 2px solid #25307a; padding-bottom: 8px; margin-bottom: 14px; }
+  .topo-impressao img { width: 80px; }
+  .assinaturas { gap: 40px; margin-top: 40px; }
+  .assinaturas div { flex: 1; border-top: 1px solid #1b2340; text-align: center; padding-top: 4px; }
+  .table-card, .stat-card, .form-card { box-shadow: none !important; break-inside: avoid; }
+  .barra span, .stat-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

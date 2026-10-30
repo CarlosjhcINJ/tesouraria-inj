@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>Livro caixa — {{ cong['nome'] }} — {{ nome_mes | capitalize }} {{ ano }}</title>
+<title>{{ titulo | capitalize }} — {{ cong['nome'] }} — {{ periodo_txt }}</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"/>
 <style>
   :root { --navy:#25307a; --azul:#1d6fb8; --claro:#e9eefb; --cinza:#5d6d7e; --verde:#1e8449; --verm:#a93226; }
@@ -33,59 +33,59 @@
 </style>
 </head>
 <body>
-<div class="acoes"><button onclick="window.print()">Imprimir ou salvar em PDF</button></div>
+<div class="acoes"><a href="{{ url_for('imprimir') }}" style="margin-right:8px;color:#25307a;font-weight:600">Voltar</a><button onclick="window.print()">Imprimir ou salvar em PDF</button></div>
 <div class="folha">
   <div class="topo">
     <img src="{{ url_for('static', filename='img/logo-inj.png') }}" alt="Igreja do Nome de Jesus"/>
     <div>
-      <h1>LIVRO CAIXA DO MÊS</h1>
-      <div class="sub">{{ cong['nome'] }} · {{ nome_mes | capitalize }} de {{ ano }}</div>
+      <h1>{{ titulo }}</h1>
+      <div class="sub">{{ cong['nome'] }} · {{ periodo_txt }}</div>
     </div>
     <div class="direita">Pastor: {{ cfg.get('nome_pastor') or '—' }}<br/>Tesoureiro: {{ cfg.get('nome_tesoureiro') or '—' }}<br/>
-      {% if fech %}Fechamento: {{ STATUS_FECH[fech['status']][0] }}{% else %}Mês ainda não fechado{% endif %}</div>
+      {% if anual %}Livro anual{% elif fech %}Fechamento: {{ STATUS_FECH[fech['status']][0] }}{% else %}Mês ainda não fechado{% endif %}</div>
   </div>
 
   <h2>RESUMO</h2>
   <table class="resumo">
     <tr><th>Livro</th><th class="n">Saldo anterior</th><th class="n">Entradas</th><th class="n">Saídas</th><th class="n">Saldo final</th></tr>
     {% for b in blocos %}
-    <tr><td>{{ b.rotulo if b.livro != 'FundoLocal' else 'Caixa local (Fundo Local)' }}</td><td class="n">{{ b.anterior | brl }}</td><td class="n e">{{ b.entradas | brl }}</td><td class="n s">{{ b.saidas | brl }}</td><td class="n"><b>{{ b.final | brl }}</b></td></tr>
+    <tr><td>{{ b.rotulo }}</td><td class="n">{{ b.anterior | brl }}</td><td class="n e">{{ b.entradas | brl }}</td><td class="n s">{{ b.saidas | brl }}</td><td class="n"><b>{{ b.final | brl }}</b></td></tr>
     {% endfor %}
     <tr class="tot"><td>TOTAL</td><td class="n">{{ total_ant | brl }}</td><td class="n">{{ total_e | brl }}</td><td class="n">{{ total_s | brl }}</td><td class="n">{{ total_final | brl }}</td></tr>
   </table>
 
   {% if dizimos_mes %}
-  <h2>DÍZIMOS REGISTRADOS NO MÊS</h2>
+  <h2>DÍZIMOS REGISTRADOS {{ 'NO ANO' if anual else 'NO MÊS' }}</h2>
   <table>
     <tr><th>Data</th><th>Observação</th><th class="n">Dízimo bruto</th></tr>
-    {% for d in dizimos_mes %}<tr><td>{{ d['data_registro'] or '' }}</td><td class="obs">{{ d['obs'] or '' }}</td><td class="n">{{ d['dizimo_bruto'] | brl }}</td></tr>{% endfor %}
+    {% for d in dizimos_mes %}<tr><td>{{ d['data_registro'] or d['mes'] }}</td><td class="obs">{{ d['obs'] or '' }}</td><td class="n">{{ d['dizimo_bruto'] | brl }}</td></tr>{% endfor %}
     <tr class="tot"><td colspan="2">Total de dízimos</td><td class="n">{{ dizimos_mes | sum(attribute='dizimo_bruto') | brl }}</td></tr>
   </table>
   {% endif %}
 
   {% for b in blocos %}
-  <h2>{{ (b.rotulo if b.livro != 'FundoLocal' else 'Caixa local (Fundo Local)') | upper }}</h2>
+  <h2>{{ b.rotulo | upper }}</h2>
   <table>
-    <tr><th style="width:80px">Data</th><th>Descrição</th><th style="width:70px">Forma</th><th class="n">Entrada</th><th class="n">Saída</th><th class="n">Saldo</th></tr>
-    <tr class="ant"><td></td><td>Saldo anterior</td><td></td><td></td><td></td><td class="n">{{ b.anterior | brl }}</td></tr>
+    <tr><th style="width:80px">Data</th>{% if anual %}<th style="width:70px">Mês</th>{% endif %}<th>Descrição</th><th style="width:70px">Forma</th><th class="n">Entrada</th><th class="n">Saída</th><th class="n">Saldo</th></tr>
+    <tr class="ant"><td></td>{% if anual %}<td></td>{% endif %}<td>Saldo {{ 'inicial do ano' if anual else 'anterior' }}</td><td></td><td></td><td></td><td class="n">{{ b.anterior | brl }}</td></tr>
     {% for l in b.linhas %}{% set t = l.t %}
     <tr>
-      <td>{{ t['data_registro'] or '' }}</td>
-      <td>{{ t['item'] }}{% if t['obs'] %}<div class="obs">{{ t['obs'] }}</div>{% endif %}</td>
+      <td>{{ t['data_registro'] or '' }}</td>{% if anual %}<td class="obs">{{ t['mes'][:3] }}</td>{% endif %}
+      <td>{{ t['item'] }}{% if t['pessoa'] %} — {{ t['pessoa'] }}{% endif %}{% if t['obs'] %}<div class="obs">{{ t['obs'] }}</div>{% endif %}</td>
       <td class="obs">{{ t['forma'] or '' }}</td>
       <td class="n e">{% if t['tipo'] == 'Entrada' %}{{ t['valor'] | brl }}{% endif %}</td>
       <td class="n s">{% if t['tipo'] == 'Saída' %}{{ t['valor'] | brl }}{% endif %}</td>
       <td class="n">{{ l.saldo | brl }}</td>
     </tr>
     {% else %}
-    <tr><td></td><td class="vazio" colspan="5">Sem movimentação neste mês.</td></tr>
+    <tr><td></td><td class="vazio" colspan="{{ 6 if anual else 5 }}">Sem movimentação {{ 'no ano' if anual else 'neste mês' }}.</td></tr>
     {% endfor %}
-    <tr class="tot"><td></td><td>Totais do mês</td><td></td><td class="n">{{ b.entradas | brl }}</td><td class="n">{{ b.saidas | brl }}</td><td class="n">{{ b.final | brl }}</td></tr>
+    <tr class="tot"><td></td>{% if anual %}<td></td>{% endif %}<td>Totais {{ 'do ano' if anual else 'do mês' }}</td><td></td><td class="n">{{ b.entradas | brl }}</td><td class="n">{{ b.saidas | brl }}</td><td class="n">{{ b.final | brl }}</td></tr>
   </table>
   {% endfor %}
 
   <div class="ass"><div>Pastor<br/><b>{{ cfg.get('nome_pastor') or '' }}</b></div><div>Tesoureiro(a)<br/><b>{{ cfg.get('nome_tesoureiro') or '' }}</b></div></div>
-  <p class="obs" style="margin-top:14px">Gerado pelo sistema Tesouraria INJ em {{ now().strftime('%d/%m/%Y %H:%M') }}. O relatório dos envios à nacional sai em “Fechar o mês”.</p>
+  <p class="obs" style="margin-top:14px">Gerado pelo sistema Tesouraria INJ em {{ now().strftime('%d/%m/%Y %H:%M') }}. O relatório dos envios à nacional sai em “Fechar o mês” e na página Imprimir.</p>
 </div>
 </body>
 </html>

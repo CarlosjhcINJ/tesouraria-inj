@@ -114,7 +114,8 @@
               <td class="text-end" style="color:#2980b9">{{ d['valor_fundo_local'] | brl }}</td>
               <td class="text-end fw-bold text-entrada">{{ d['valor_liquido'] | brl }}</td>
               <td class="small text-muted">{{ d['obs'] or '—' }}</td>
-              <td>
+              <td class="d-flex gap-1">
+                <a href="{{ url_for('recibo', tipo='dizimo', rid=d['id']) }}" target="_blank" class="btn btn-xs btn-outline-success" style="padding:2px 8px; font-size:0.72rem" title="Recibo"><i class="bi bi-receipt"></i></a>
                 {% if pode_editar %}
                 <form method="POST" action="{{ url_for('deletar_dizimo', did=d['id']) }}"
                       onsubmit="return confirmarExclusao(this, 'Excluir este registro de dízimo de {{ d['mes'] | capitalize }}?')">

@@ -213,6 +213,8 @@
                 {{ t['obs'] or '' }}
               </td>
               <td>
+                <div class="d-flex gap-1 align-items-center">
+                {% if not t['origem'] %}<a href="{{ url_for('recibo', tipo='lancamento', rid=t['id']) }}" target="_blank" class="btn btn-xs btn-outline-success" style="padding:2px 8px; font-size:0.75rem" title="Recibo"><i class="bi bi-receipt"></i></a>{% endif %}
                 {% if pode_editar and not t['origem'] and t['mes'] not in travados %}
                 <div class="d-flex gap-1">
                   {% if not t['n_anexos'] %}
@@ -234,6 +236,7 @@
                   </form>
                 </div>
                 {% elif t['mes'] in travados %}<i class="bi bi-lock text-muted" title="Mês fechado"></i>{% endif %}
+                </div>
               </td>
             </tr>
             {% else %}

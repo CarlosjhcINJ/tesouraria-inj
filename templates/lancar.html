@@ -25,6 +25,13 @@
     <a href="{{ url_for('lancar', tipo='Saída' if tipo == 'Entrada' else 'Entrada') }}" class="btn btn-sm btn-outline-secondary">Trocar para {{ 'saída' if tipo == 'Entrada' else 'entrada' }}</a>
   </div>
 
+  {% if ultimo %}
+  <div class="alert alert-success d-flex align-items-center justify-content-between flex-wrap gap-2">
+    <span><i class="bi bi-check-circle-fill me-1"></i>Registrado: <b>{{ ultimo['item'] }}</b> · {{ ultimo['valor'] | brl }}{% if ultimo['pessoa'] %} · {{ ultimo['pessoa'] }}{% endif %}</span>
+    <a href="{{ url_for('recibo', tipo='lancamento', rid=ultimo['id']) }}" target="_blank" class="btn btn-sm btn-success"><i class="bi bi-receipt me-1"></i>Imprimir recibo</a>
+  </div>
+  {% endif %}
+
   <!-- Passo B: tipo -->
   <div id="escolha">
     <p class="text-muted">Escolha o tipo de {{ tipo | lower }}:</p>
@@ -75,6 +82,10 @@
         <div class="col-6 col-md-3">
           <label class="form-label">Ano</label>
           <select name="ano" class="form-select">{% for a in anos %}<option value="{{ a }}" {% if a == ano_atual %}selected{% endif %}>{{ a }}</option>{% endfor %}</select>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label">{{ 'Recebido de' if tipo == 'Entrada' else 'Pago a (quem recebeu o dinheiro)' }} <span class="text-muted fw-normal">(sai no recibo)</span></label>
+          <input type="text" name="pessoa" class="form-control" maxlength="120" placeholder="{{ 'Nome de quem entregou (opcional)' if tipo == 'Entrada' else 'Nome da pessoa ou empresa' }}"/>
         </div>
         <div class="col-md-6">
           <label class="form-label">Forma</label>

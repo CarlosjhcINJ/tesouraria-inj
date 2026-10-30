@@ -235,7 +235,7 @@ def test_foto_de_comprovante_e_reduzida(app):
 def test_inicio_guiado_e_livro_do_mes(app):
     tes = entrar(app, 'vr.tesouraria', 'tesoureiro123')
     inicio = tes.get('/?ano=2026&mes=9').get_data(as_text=True)
-    assert 'Registrar ENTRADA' in inicio and 'Registrar SAÍDA' in inicio and 'Orçamento do ano' in inicio
+    assert 'Os lançamentos começam aqui' in inicio and '>ENTRADA<' in inicio and '>SAÍDA<' in inicio and 'Orçamento do ano' in inicio
     r = tes.post('/lancamentos', data={'livro': 'Projetos', 'tipo': 'Entrada', 'item': 'Brechó', 'valor': '85,50',
                                        'mes': 'novembro', 'ano': 2026, 'data_registro': '02/11/2026', 'voltar': 'lancar'})
     assert '/lancar' in r.headers['Location']
@@ -252,7 +252,54 @@ def test_admin_abre_congregacao(app):
         cid = conn.execute("SELECT id FROM congregacoes WHERE nome='Vila Ramos/SP'").fetchone()['id']
     assert adm.get(f'/ver/{cid}').status_code == 302
     pagina = adm.get('/').get_data(as_text=True)
-    assert 'Vila Ramos/SP' in pagina and 'Registrar ENTRADA' in pagina
+    assert 'Vila Ramos/SP' in pagina and '>ENTRADA<' in pagina
     assert adm.get('/lancar?tipo=Saída').status_code == 200
     adm.get('/ver/nacional')
     assert adm.get('/').status_code == 302
+
+
+def test_recibo_configuracao_balanco_e_impressao(app):
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    tes = entrar(app, 'vr.tesouraria', 'tesoureiro123')
+    # nomes dos responsáveis
+    r = tes.post('/configuracoes', data={'acao': 'dados', 'nome_congregacao': 'Vila Ramos/SP', 'nome_pastor': 'Pr. Fulano de Tal',
+                                         'nome_tesoureiro': 'Irmã Beltrana', 'ano_atual': 2026, 'saldo_ano_anterior': '1.000,00'})
+    assert r.status_code == 302
+    cfg = tes.get('/configuracoes?ano=2026').get_data(as_text=True)
+    assert 'Pr. Fulano de Tal' in cfg and 'Confirmadas pelo pastor' in cfg  # carta 2026 já confirmada: travada p/ tesoureiro
+    assert 'porcentagens' in tes.post('/configuracoes', data={'acao': 'porcentagens', 'ano': 2026, 'categoria': 'nova'},
+                                      follow_redirects=True).get_data(as_text=True).lower()
+    with appmod.get_db() as conn:
+        assert conn.execute("SELECT categoria FROM compromissos WHERE ano=2026").fetchone()['categoria'] == 'formada'
+    # ano sem carta: congregação informa, pastor confirma
+    tes.post('/configuracoes', data={'acao': 'porcentagens', 'ano': 2027, 'categoria': 'formacao', 'fundo_local_pct': '5', 'betel': '1'})
+    with appmod.get_db() as conn:
+        c = conn.execute("SELECT * FROM compromissos WHERE ano=2027").fetchone()
+        assert (c['categoria'], c['fundo_local_pct'], c['betel'], c['nivelacao'], c['confirmado_em']) == ('formacao', 5, 1, 0, None)
+    # lançamento com nome -> recibo com valor por extenso e nomes
+    r = tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Saída', 'item': 'Serviços Públicos (água, luz)', 'valor': '1.250,50',
+                                       'mes': 'outubro', 'ano': 2026, 'pessoa': 'Sabesp', 'voltar': 'lancar'})
+    tid = int(r.headers['Location'].split('ultimo=')[1])
+    assert 'Imprimir recibo' in tes.get(r.headers['Location']).get_data(as_text=True)
+    rec = tes.get(f'/recibo/lancamento/{tid}').get_data(as_text=True)
+    assert 'mil duzentos e cinquenta reais e cinquenta centavos' in rec and 'Sabesp' in rec and 'Irmã Beltrana' in rec
+    with appmod.get_db() as conn:
+        did = conn.execute('SELECT id FROM dizimos ORDER BY id LIMIT 1').fetchone()['id']
+    assert 'Dízimos' in tes.get(f'/recibo/dizimo/{did}').get_data(as_text=True)
+    assert tes.get('/recibo/lancamento/999999').status_code == 404
+    # livros, balanço e central de impressão
+    ano = tes.get('/livro-do-mes?ano=2026&periodo=ano').get_data(as_text=True)
+    assert 'LIVRO CAIXA DO ANO' in ano and 'Pr. Fulano de Tal' in ano and 'Serviços Públicos' in ano
+    so = tes.get('/livro-do-mes?ano=2026&mes=10&livro=Projetos').get_data(as_text=True)
+    assert 'LIVRO PROJETOS' in so and 'Sabesp' not in so
+    bal = tes.get('/balanco?ano=2026').get_data(as_text=True)
+    assert 'Balanço por livro' in bal and 'g-mensal' in bal and 'Sustento pastoral' in bal
+    assert tes.get('/balanco?ano=2026&mes=9').status_code == 200
+    assert 'Relatório dos envios' in tes.get('/imprimir?ano=2026&mes=9').get_data(as_text=True)
+
+
+def test_valor_extenso():
+    assert appmod.valor_extenso(3014.11) == 'três mil e quatorze reais e onze centavos'
+    assert appmod.valor_extenso(100) == 'cem reais'
+    assert appmod.valor_extenso(1) == 'um real'

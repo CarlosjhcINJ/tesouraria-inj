@@ -40,7 +40,7 @@
     {% if session.get('cong_id') %}
     <div class="nav-section">TESOURARIA LOCAL</div>
     <a href="{{ url_for('dashboard') }}" class="nav-item {% if ep == 'dashboard' %}active{% endif %}"><i class="bi bi-house"></i> Início</a>
-    <a href="{{ url_for('configuracoes') }}" class="nav-item {% if ep == 'configuracoes' %}active{% endif %}"><i class="bi bi-gear"></i> Configurar a congregação</a>
+    <a href="{{ url_for('configuracoes') }}" class="nav-item {% if ep == 'configuracoes' %}active{% endif %}"><i class="bi bi-person-vcard"></i> 1º Cadastro da congregação</a>
     <a href="{{ url_for('orcamento') }}" class="nav-item {% if ep == 'orcamento' %}active{% endif %}"><i class="bi bi-pie-chart"></i> Orçamento</a>
     <a href="{{ url_for('lancar', tipo='Entrada') }}" class="nav-item {% if ep == 'lancar' and request.args.get('tipo') == 'Entrada' %}active{% endif %}"><i class="bi bi-arrow-down-circle"></i> Registrar entrada</a>
     <a href="{{ url_for('lancar', tipo='Saída') }}" class="nav-item {% if ep == 'lancar' and request.args.get('tipo') == 'Saída' %}active{% endif %}"><i class="bi bi-arrow-up-circle"></i> Registrar saída</a>
@@ -53,6 +53,7 @@
     <div class="nav-section mt-2">FIM DO MÊS</div>
     <a href="{{ url_for('fechamento') }}" class="nav-item {% if ep == 'fechamento' %}active{% endif %}"><i class="bi bi-lock"></i> Fechar o mês</a>
     <a href="{{ url_for('imprimir') }}" class="nav-item {% if ep == 'imprimir' %}active{% endif %}"><i class="bi bi-printer"></i> Imprimir (livros, recibos, envios)</a>
+    <a href="{{ url_for('exportar_excel') }}" class="nav-item"><i class="bi bi-file-earmark-spreadsheet"></i> Exportar (Excel / Google)</a>
     <a href="{{ url_for('balanco') }}" class="nav-item {% if ep == 'balanco' %}active{% endif %}"><i class="bi bi-clipboard-data"></i> Balanço e gráficos</a>
     <a href="{{ url_for('relatorio') }}" class="nav-item {% if ep == 'relatorio' %}active{% endif %}"><i class="bi bi-bar-chart-line"></i> Relatórios</a>
     <a href="{{ url_for('visao_geral') }}" class="nav-item {% if ep == 'visao_geral' %}active{% endif %}"><i class="bi bi-graph-up"></i> Gráficos do ano</a>

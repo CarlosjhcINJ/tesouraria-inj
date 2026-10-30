@@ -418,3 +418,10 @@ body {
   .table-card, .stat-card, .form-card { box-shadow: none !important; break-inside: avoid; }
   .barra span, .stat-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
 }
+.livro-escolha { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; background: #fff;
+  border: 2px solid #e3e7ee; border-radius: 14px; padding: 18px; box-shadow: var(--card-shadow); color: #1b2340; transition: border-color .12s, transform .12s; }
+.livro-escolha:hover { border-color: #1a5276; transform: translateY(-1px); }
+.livro-escolha i { font-size: 1.8rem; color: #1a3a5c; }
+.livro-escolha b { font-size: 1.1rem; }
+.livro-escolha small { color: #7f8c9a; }
+.badge-livro { display: inline-block; background: #1a3a5c; color: #fff; border-radius: 999px; padding: 3px 12px; font-size: .8rem; font-weight: 600; }

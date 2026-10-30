@@ -21,8 +21,8 @@
 {% if falta %}
 <a href="{{ url_for('configuracoes') }}" class="guia aviso-config mb-3">
   <span class="guia-num" style="background:#f39c12">0</span>
-  <span class="guia-txt"><b>Configure a congregação primeiro</b>
-    <small>Falta cadastrar {{ falta | join(', ') }}. Os nomes saem nos livros, recibos e no relatório dos envios.</small></span>
+  <span class="guia-txt"><b>Primeiro passo obrigatório: cadastro da congregação</b>
+    <small>Falta cadastrar {{ falta | join(', ') }}. Sem o cadastro, o sistema não libera os lançamentos.</small></span>
   <i class="bi bi-chevron-right"></i>
 </a>
 {% endif %}

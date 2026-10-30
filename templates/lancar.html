@@ -7,8 +7,9 @@
   <!-- Passo A: entrada ou saída -->
   <div class="passos mb-3">
     <span class="passo {{ 'feito' if tipo else 'atual' }}">1. Entrada ou saída</span>
-    <span class="passo {{ 'atual' if tipo else '' }}" id="p2">2. Que tipo</span>
-    <span class="passo" id="p3">3. Valor e data</span>
+    <span class="passo {{ 'atual' if tipo else '' }}" id="p2">2. Livro</span>
+    <span class="passo" id="p3">3. Tipo</span>
+    <span class="passo" id="p4">4. Valor e data</span>
   </div>
 
   {% if not tipo %}
@@ -32,30 +33,47 @@
   </div>
   {% endif %}
 
-  <!-- Passo B: tipo -->
-  <div id="escolha">
-    <p class="text-muted">Escolha o tipo de {{ tipo | lower }}:</p>
-    {% for g in grupos %}
-    <div class="form-card mb-3">
-      <div class="fw-bold">{{ g.rotulo }}</div>
-      <div class="small text-muted mb-2">{{ g.ajuda }}</div>
-      <div class="d-flex flex-wrap gap-2">
-        {% for it in g.itens %}
-        <button type="button" class="btn btn-sm btn-outline-primary item-btn" data-livro="{{ g.livro }}" data-item="{{ it }}" data-rotulo="{{ g.rotulo }}">{{ it }}</button>
-        {% endfor %}
+  <!-- Passo B: livro -->
+  {% set icones = {'FundoLocal':'bi-wallet2','Projetos':'bi-hammer','Envios':'bi-send'} %}
+  <div id="livros">
+    <p class="text-muted mb-2">Em qual <b>livro</b> vai esta {{ tipo | lower }}?</p>
+    <div class="row g-3 mb-3">
+      {% for g in grupos %}
+      <div class="col-md-{{ 12 // grupos|length }}">
+        <button type="button" class="livro-escolha w-100 h-100" data-livro="{{ g.livro }}">
+          <i class="bi {{ icones[g.livro] }}"></i>
+          <b>{{ g.rotulo }}</b>
+          <small>{{ g.ajuda }}</small>
+        </button>
       </div>
+      {% endfor %}
     </div>
-    {% endfor %}
     {% if tipo == 'Entrada' %}
-    <div class="form-card mb-3"><div class="fw-bold">Dízimos</div><div class="small text-muted mb-2">Têm tela própria, que faz a divisão sozinha.</div><a href="{{ url_for('dizimos') }}" class="btn btn-sm btn-outline-primary">Registrar dízimos</a></div>
+    <p class="small text-muted">Dízimos têm tela própria, que faz a liquidação sozinha: <a href="{{ url_for('dizimos') }}">Registrar dízimos</a>.</p>
     {% endif %}
   </div>
+
+  <!-- Passo C: tipo dentro do livro -->
+  {% for g in grupos %}
+  <div class="form-card mb-3 itens-livro" data-livro="{{ g.livro }}" hidden>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <div><span class="badge-livro"><i class="bi {{ icones[g.livro] }} me-1"></i>Livro: {{ g.rotulo }}</span></div>
+      <button type="button" class="btn btn-sm btn-link voltar-livros">Trocar o livro</button>
+    </div>
+    <p class="text-muted small mb-2">Escolha o tipo de {{ tipo | lower }}:</p>
+    <div class="d-flex flex-wrap gap-2">
+      {% for it in g.itens %}
+      <button type="button" class="btn btn-sm btn-outline-primary item-btn" data-livro="{{ g.livro }}" data-item="{{ it }}" data-rotulo="{{ g.rotulo }}">{{ it }}</button>
+      {% endfor %}
+    </div>
+  </div>
+  {% endfor %}
 
   <!-- Passo C: valor -->
   <div id="formulario" class="form-card" hidden>
     <div class="d-flex justify-content-between align-items-start mb-3">
       <div>
-        <div class="small text-muted" id="f-livro"></div>
+        <span class="badge-livro" id="f-livro"></span>
         <div class="fs-5 fw-bold" id="f-item"></div>
       </div>
       <button type="button" class="btn btn-sm btn-link" id="trocar">Trocar o tipo</button>
@@ -111,24 +129,34 @@
 {% block scripts %}
 <script>
 (function () {
-  const esc = document.getElementById('escolha'), frm = document.getElementById('formulario');
-  if (!esc) return;
+  const livros = document.getElementById('livros'), frm = document.getElementById('formulario');
+  if (!livros) return;
+  const grupos = document.querySelectorAll('.itens-livro');
+  const passo = (n, cls) => { const e = document.getElementById('p' + n); if (e) e.className = 'passo ' + cls; };
+  function mostrarLivros() {
+    livros.hidden = false; grupos.forEach(g => g.hidden = true); frm.hidden = true;
+    passo(2, 'atual'); passo(3, ''); passo(4, '');
+  }
+  function mostrarItens(livro) {
+    livros.hidden = true; frm.hidden = true;
+    grupos.forEach(g => g.hidden = g.dataset.livro !== livro);
+    passo(2, 'feito'); passo(3, 'atual'); passo(4, '');
+  }
   function abrir(livro, item, rotulo) {
     document.getElementById('h-livro').value = livro;
     document.getElementById('h-item').value = item;
-    document.getElementById('f-livro').textContent = rotulo;
+    document.getElementById('f-livro').textContent = 'Livro: ' + rotulo;
     document.getElementById('f-item').textContent = item;
-    esc.hidden = true; frm.hidden = false;
-    document.getElementById('p2').className = 'passo feito';
-    document.getElementById('p3').className = 'passo atual';
+    grupos.forEach(g => g.hidden = true); frm.hidden = false;
+    passo(3, 'feito'); passo(4, 'atual');
     document.getElementById('valor').focus();
   }
+  document.querySelectorAll('.livro-escolha').forEach(b => b.addEventListener('click', () => mostrarItens(b.dataset.livro)));
+  document.querySelectorAll('.voltar-livros').forEach(b => b.addEventListener('click', mostrarLivros));
   document.querySelectorAll('.item-btn').forEach(b => b.addEventListener('click', () => abrir(b.dataset.livro, b.dataset.item, b.dataset.rotulo)));
-  document.getElementById('trocar').addEventListener('click', () => {
-    esc.hidden = false; frm.hidden = true;
-    document.getElementById('p2').className = 'passo atual';
-    document.getElementById('p3').className = 'passo';
-  });
+  document.getElementById('trocar').addEventListener('click', () => mostrarItens(document.getElementById('h-livro').value));
+  const pre = new URLSearchParams(location.search).get('livro');
+  if (pre && document.querySelector(`.itens-livro[data-livro="${pre}"]`)) mostrarItens(pre);
 })();
 </script>
 {% endblock %}

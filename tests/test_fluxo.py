@@ -4,6 +4,7 @@ Rodar: python -m pytest -q
 Com Postgres: DATABASE_URL=postgresql://... python -m pytest -q
 """
 import io
+from datetime import date
 import os
 import re
 import sys
@@ -267,16 +268,26 @@ def test_recibo_configuracao_balanco_e_impressao(app):
                                          'nome_tesoureiro': 'Irmã Beltrana', 'ano_atual': 2026, 'saldo_ano_anterior': '1.000,00'})
     assert r.status_code == 302
     cfg = tes.get('/configuracoes?ano=2026').get_data(as_text=True)
-    assert 'Pr. Fulano de Tal' in cfg and 'Confirmadas pelo pastor' in cfg  # carta 2026 já confirmada: travada p/ tesoureiro
+    assert 'Pr. Fulano de Tal' in cfg and 'Confirmada pelo pastor' in cfg  # carta 2026 já confirmada: travada p/ tesoureiro
     assert 'porcentagens' in tes.post('/configuracoes', data={'acao': 'porcentagens', 'ano': 2026, 'categoria': 'nova'},
                                       follow_redirects=True).get_data(as_text=True).lower()
     with appmod.get_db() as conn:
         assert conn.execute("SELECT categoria FROM compromissos WHERE ano=2026").fetchone()['categoria'] == 'formada'
     # ano sem carta: congregação informa, pastor confirma
-    tes.post('/configuracoes', data={'acao': 'porcentagens', 'ano': 2027, 'categoria': 'formacao', 'fundo_local_pct': '5', 'betel': '1'})
+    # ano sem carta: com os dízimos do ano anterior o sistema define classificação e liquidação
+    dados = {'acao': 'porcentagens', 'ano': 2027}
+    dados.update({f'm{i}': '900,00' for i in range(12)})   # média 900 (SM 2026 = 1.621): em formação, sem Betel
+    tes.post('/configuracoes', data=dados)
     with appmod.get_db() as conn:
         c = conn.execute("SELECT * FROM compromissos WHERE ano=2027").fetchone()
-        assert (c['categoria'], c['fundo_local_pct'], c['betel'], c['nivelacao'], c['confirmado_em']) == ('formacao', 5, 1, 0, None)
+        assert (c['categoria'], c['fundo_local_pct'], c['betel'], c['nivelacao'], c['confirmado_em'], c['meses']) == ('formacao', 0, 0, 0, None, 12)
+    pas = entrar(app, 'vr.pastor', 'pastor12345')
+    dados.update({f'm{i}': '2.500,00' for i in range(12)})  # 2.500 > 1,25 SM: formada, nivelação, Betel, fundo 1%
+    pas.post('/configuracoes', data=dados)
+    with appmod.get_db() as conn:
+        c = conn.execute("SELECT * FROM compromissos WHERE ano=2027").fetchone()
+        assert (c['categoria'], c['fundo_local_pct'], c['betel'], c['nivelacao']) == ('formada', 1, 1, 1) and c['confirmado_em']
+    assert 'já foram confirmadas' in tes.post('/configuracoes', data=dados, follow_redirects=True).get_data(as_text=True)
     # lançamento com nome -> recibo com valor por extenso e nomes
     r = tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Saída', 'item': 'Serviços Públicos (água, luz)', 'valor': '1.250,50',
                                        'mes': 'outubro', 'ano': 2026, 'pessoa': 'Sabesp', 'voltar': 'lancar'})
@@ -303,3 +314,33 @@ def test_valor_extenso():
     assert appmod.valor_extenso(3014.11) == 'três mil e quatorze reais e onze centavos'
     assert appmod.valor_extenso(100) == 'cem reais'
     assert appmod.valor_extenso(1) == 'um real'
+
+
+def test_cadastro_obrigatorio_livro_excel_e_tutorial(app):
+    import openpyxl
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    adm = entrar(app, 'nacional', 'senha-forte-123')
+    adm.post('/admin/nova', data={'nome': 'Nova Esperança', 'tes_nome': 'Maria Souza', 'tes_usuario': 'ne.tes', 'tes_senha': 'tesoureiro123',
+                                  'pas_nome': 'Pr. João', 'pas_usuario': 'ne.pas', 'pas_senha': 'pastor12345'})
+    tes = entrar(app, 'ne.tes', 'tesoureiro123')
+    # nomes já vêm da criação; sem a classificação do ano, nada é liberado
+    r = tes.get('/lancar?tipo=Entrada')
+    assert r.status_code == 302 and '/configuracoes' in r.headers['Location']
+    r = tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Entrada', 'item': 'Votos', 'valor': '10', 'mes': 'outubro', 'ano': date.today().year})
+    assert '/configuracoes' in r.headers['Location']
+    assert '/configuracoes' in tes.get('/dizimos').headers['Location']
+    pagina = tes.get('/configuracoes').get_data(as_text=True)
+    assert 'Maria Souza' in pagina and 'Pr. João' in pagina
+    # congregação nova: tudo em zero, começa do zero
+    tes.post('/configuracoes', data={'acao': 'porcentagens', 'ano': date.today().year})
+    with appmod.get_db() as conn:
+        c = conn.execute("SELECT c.* FROM compromissos c JOIN congregacoes g ON g.id=c.cong_id WHERE g.nome='Nova Esperança'").fetchone()
+        assert c['categoria'] == 'nova' and c['fundo_local_pct'] == 0
+    pag = tes.get('/lancar?tipo=Saída').get_data(as_text=True)
+    assert 'Em qual <b>livro</b>' in pag and 'livro-escolha' in pag
+    # exportação
+    r = tes.get(f'/exportar/excel?ano={date.today().year}')
+    wb = openpyxl.load_workbook(io.BytesIO(r.data))
+    assert wb.sheetnames[:3] == ['Cadastro', 'Lançamentos', 'Caixa local'] and 'Dízimos' in wb.sheetnames and 'Balanço' in wb.sheetnames
+    assert 'Ordem do trabalho'.lower() in tes.get('/tutorial').get_data(as_text=True).lower()

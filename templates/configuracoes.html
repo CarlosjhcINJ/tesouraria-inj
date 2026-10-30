@@ -1,39 +1,40 @@
 {% extends 'base.html' %}
-{% block title %}Configurar a congregação — Tesouraria INJ{% endblock %}
-{% block breadcrumb %}<li class="breadcrumb-item active">Configurar a congregação</li>{% endblock %}
+{% block title %}Cadastro da congregação — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Cadastro da congregação</li>{% endblock %}
 
 {% block content %}
-<div class="mb-4">
-  <h1 class="page-title">Configurar a congregação</h1>
-  <p class="text-muted mb-0 small">Faça isto uma vez por ano. Os nomes saem nos livros, nos recibos e no relatório dos envios.
-    As porcentagens dividem os dízimos sozinhas.</p>
+<div class="mb-3">
+  <h1 class="page-title">Cadastro da congregação</h1>
+  <p class="text-muted mb-0 small">Primeiro passo, antes de qualquer lançamento. Os nomes saem nos livros, recibos e no relatório dos envios.
+    Com os dízimos do ano anterior, o sistema define sozinho a classificação da congregação e a liquidação dos dízimos.</p>
 </div>
 
 <div class="passos mb-4">
   <span class="passo {{ 'feito' if cfg.get('nome_pastor') and cfg.get('nome_tesoureiro') else 'atual' }}">1. Responsáveis</span>
-  <span class="passo {{ 'feito' if comp else ('atual' if cfg.get('nome_pastor') else '') }}">2. Porcentagens de {{ ano }}</span>
+  <span class="passo {{ 'feito' if comp else ('atual' if cfg.get('nome_pastor') else '') }}">2. Dízimos do ano anterior → classificação</span>
   <span class="passo {{ 'feito' if comp and comp['confirmado_em'] else ('atual' if comp else '') }}">3. Pastor confirma</span>
+  <span class="passo {{ 'feito' if comp else '' }}">4. Liberado para lançar</span>
 </div>
 
 <div class="row g-4">
   <!-- 1. Responsáveis -->
-  <div class="col-lg-6">
+  <div class="col-xl-5">
     <form method="POST" class="form-card h-100">
       <input type="hidden" name="acao" value="dados"/>
       <div class="form-section-title"><span class="guia-num me-2" style="width:28px;height:28px;font-size:.9rem">1</span>Responsáveis e dados</div>
       <fieldset {% if not pode %}disabled{% endif %}>
       <div class="mb-3">
         <label class="form-label">Nome da congregação</label>
-        <input type="text" name="nome_congregacao" class="form-control" value="{{ cfg.get('nome_congregacao', '') }}"/>
+        <input type="text" name="nome_congregacao" class="form-control" value="{{ cfg.get('nome_congregacao', '') }}" required/>
       </div>
       <div class="row g-3 mb-3">
         <div class="col-md-6">
-          <label class="form-label"><i class="bi bi-person-circle me-1"></i>Pastor</label>
-          <input type="text" name="nome_pastor" class="form-control" value="{{ cfg.get('nome_pastor', '') }}" placeholder="Nome completo"/>
+          <label class="form-label"><i class="bi bi-person-circle me-1"></i>Pastor <span class="text-danger">*</span></label>
+          <input type="text" name="nome_pastor" class="form-control" value="{{ cfg.get('nome_pastor', '') }}" placeholder="Nome completo" required/>
         </div>
         <div class="col-md-6">
-          <label class="form-label"><i class="bi bi-person-check me-1"></i>Tesoureiro(a)</label>
-          <input type="text" name="nome_tesoureiro" class="form-control" value="{{ cfg.get('nome_tesoureiro', '') }}" placeholder="Nome completo"/>
+          <label class="form-label"><i class="bi bi-person-check me-1"></i>Tesoureiro(a) <span class="text-danger">*</span></label>
+          <input type="text" name="nome_tesoureiro" class="form-control" value="{{ cfg.get('nome_tesoureiro', '') }}" placeholder="Nome completo" required/>
         </div>
         <div class="col-md-6">
           <label class="form-label">Auxiliar de tesouraria</label>
@@ -61,67 +62,62 @@
     </form>
   </div>
 
-  <!-- 2. Porcentagens -->
-  <div class="col-lg-6">
+  <!-- 2. Dízimos do ano anterior -> classificação e liquidação -->
+  <div class="col-xl-7">
     <div class="form-card h-100">
       <div class="d-flex justify-content-between align-items-start">
-        <div class="form-section-title"><span class="guia-num me-2" style="width:28px;height:28px;font-size:.9rem">2</span>Porcentagens de {{ ano }}</div>
+        <div class="form-section-title"><span class="guia-num me-2" style="width:28px;height:28px;font-size:.9rem">2</span>Classificação e liquidação de {{ ano }}</div>
         <form><select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
           {% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></form>
       </div>
 
       {% if comp %}
         {% if comp['confirmado_em'] %}
-        <div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>Confirmadas pelo pastor em {{ comp['confirmado_em'] | data }}.
+        <div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>Confirmada pelo pastor em {{ comp['confirmado_em'] | data }}.
           {% if travado %}Para mudar, fale com a Tesouraria Nacional.{% endif %}</div>
         {% else %}
-        <div class="alert alert-warning py-2 small"><i class="bi bi-hourglass-split me-1"></i>{{ comp['observacao'] or 'Emitidas' }}. Falta o pastor confirmar
+        <div class="alert alert-warning py-2 small"><i class="bi bi-hourglass-split me-1"></i>{{ comp['observacao'] or 'Emitida' }}. Falta o pastor confirmar
           {% if papel == 'pastor' %}— ao salvar abaixo, você confirma.{% else %}(o pastor entra e salva esta tela, ou confirma na <a href="{{ url_for('carta', ano=ano) }}">carta anual</a>).{% endif %}</div>
         {% endif %}
-      {% else %}
-      <div class="alert alert-info py-2 small"><i class="bi bi-info-circle me-1"></i>Ainda não há porcentagens para {{ ano }}. Copie da carta que a congregação recebeu.
-        Congregação nova começa do zero.</div>
       {% endif %}
 
-      <form method="POST">
+      <p class="small text-muted mb-2">Digite o <b>dízimo bruto de cada mês</b> (de dezembro de {{ ano - 2 }} a novembro de {{ ano - 1 }}).
+        Os meses que já estão no sistema vêm preenchidos. Congregação nova: deixe tudo em zero — começa do zero.</p>
+
+      <form method="POST" id="form-base">
         <input type="hidden" name="acao" value="porcentagens"/>
         <input type="hidden" name="ano" value="{{ ano }}"/>
         <fieldset {% if travado or not pode %}disabled{% endif %}>
-        <div class="mb-3">
-          <label class="form-label">Classificação da congregação</label>
-          <select name="categoria" id="pc-cat" class="form-select">
-            {% for k, v in CATEGORIAS_CONG.items() %}<option value="{{ k }}" {% if comp and comp['categoria'] == k %}selected{% elif not comp and k == 'nova' %}selected{% endif %}>{{ v }}</option>{% endfor %}
-          </select>
-        </div>
-        <div class="row g-3 mb-3">
-          <div class="col-6">
-            <label class="form-label">Aporte ao fundo local</label>
-            <div class="input-group"><input type="number" min="0" max="30" step="1" name="fundo_local_pct" id="pc-fl" class="form-control"
-                   value="{{ comp['fundo_local_pct'] if comp else 0 }}"/><span class="input-group-text">%</span></div>
-            <div class="form-text">Só número inteiro (ex.: 4).</div>
+        <div class="row g-2 mb-3">
+          {% for m in meses_base %}
+          <div class="col-4 col-md-3">
+            <label class="form-label small mb-0">{{ m.rotulo }}{% if m.do_sistema %} <i class="bi bi-database-check text-success" title="Valor do sistema"></i>{% endif %}</label>
+            <input type="text" inputmode="decimal" name="m{{ loop.index0 }}" class="form-control form-control-sm base-mes"
+                   value="{{ (m.valor | brl | replace('R$ ', '')) if m.valor else '' }}" placeholder="0,00"/>
           </div>
-          <div class="col-6">
-            <label class="form-label d-block">Envios fixos</label>
-            <div class="form-check"><input class="form-check-input" type="checkbox" checked disabled/>
-              <label class="form-check-label">Dízimo dos Dízimos {{ '%.0f' | format(reg.get('pct_dizimo_dizimos', 0.1) * 100) }}%</label></div>
-            <div class="form-check"><input class="form-check-input" type="checkbox" name="nivelacao" value="1" id="pc-niv" {% if comp and comp['nivelacao'] %}checked{% endif %}/>
-              <label class="form-check-label" for="pc-niv">Nivelação {{ '%.0f' | format(reg.get('pct_nivelacao', 0.05) * 100) }}%</label></div>
-            <div class="form-check"><input class="form-check-input" type="checkbox" name="betel" value="1" id="pc-bet" {% if comp and comp['betel'] %}checked{% endif %}/>
-              <label class="form-check-label" for="pc-bet">Betel {{ '%.0f' | format(reg.get('pct_betel', 0.04) * 100) }}% do líquido</label></div>
-          </div>
+          {% endfor %}
         </div>
 
-        <div class="calc-box mb-3" id="pc-exemplo">
-          <div class="small fw-bold mb-1">Exemplo: a cada R$ 1.000,00 de dízimo</div>
-          <div class="calc-linha"><span>Dízimo dos Dízimos</span><b id="ex-dd">—</b></div>
-          <div class="calc-linha"><span>Nivelação</span><b id="ex-niv">—</b></div>
-          <div class="calc-linha"><span>Betel</span><b id="ex-bet">—</b></div>
-          <div class="calc-linha"><span>Fundo local</span><b id="ex-fl">—</b></div>
-          <div class="calc-linha"><span>Sustento pastoral</span><b id="ex-liq">—</b></div>
+        <div class="calc-box mb-3">
+          <div class="row g-2 small">
+            <div class="col-6 col-md-4"><div class="text-muted">Média mensal</div><b id="r-media">—</b></div>
+            <div class="col-6 col-md-4"><div class="text-muted">Salário mínimo base ({{ ano - 1 }})</div><b>{{ sm | brl }}</b></div>
+            <div class="col-12 col-md-4"><div class="text-muted">Classificação</div><b id="r-cat" class="text-primary">—</b></div>
+          </div>
+          <hr class="my-2"/>
+          <div class="small fw-bold mb-1">Liquidação de um mês com dízimo igual à média</div>
+          <div class="calc-linha"><span>Dízimo dos Dízimos {{ '%.0f' | format(reg.get('pct_dizimo_dizimos', 0.1) * 100) }}%</span><b id="ex-dd">—</b></div>
+          <div class="calc-linha"><span>Nivelação <span id="r-niv" class="text-muted"></span></span><b id="ex-niv">—</b></div>
+          <div class="calc-linha"><span>Betel <span id="r-bet" class="text-muted"></span></span><b id="ex-bet">—</b></div>
+          <div class="calc-linha"><span>Aporte ao fundo local <b id="r-fl"></b></span><b id="ex-fl">—</b></div>
+          <div class="calc-linha total"><span>Sustento pastoral</span><b id="ex-liq">—</b></div>
         </div>
-        <button class="btn btn-primary w-100"><i class="bi bi-save me-2"></i>{{ 'Salvar e confirmar' if papel == 'pastor' else 'Salvar porcentagens' }}</button>
+        <button class="btn btn-primary w-100"><i class="bi bi-calculator me-2"></i>{{ 'Calcular, salvar e confirmar' if papel == 'pastor' else 'Calcular e salvar' }}</button>
         </fieldset>
       </form>
+      <div class="form-text mt-2">Regras do Regulamento Interno: plenamente formada com média a partir de 1 salário mínimo; em formação a partir de
+        {{ '%.2f' | format(reg.get('fator_formacao', 0.333)) | replace('.', ',') }} SM; nivelação acima de {{ '%.2f' | format(reg.get('fator_nivelacao', 1.25)) | replace('.', ',') }} SM;
+        fundo local de 1% por salário mínimo inteiro do saldo após o Dízimo dos Dízimos.</div>
     </div>
   </div>
 </div>
@@ -130,18 +126,28 @@
 {% block scripts %}
 <script>
 (function () {
+  const SM = {{ sm }}, FF = {{ reg.get('fator_formacao', 1/3) }}, FN = {{ reg.get('fator_nivelacao', 1.25) }};
   const PDD = {{ reg.get('pct_dizimo_dizimos', 0.1) }}, PNIV = {{ reg.get('pct_nivelacao', 0.05) }}, PBET = {{ reg.get('pct_betel', 0.04) }};
+  const NOMES = {{ CATEGORIAS_CONG | tojson }};
   const r2 = v => Math.round(v * 100) / 100;
   const brl = v => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  const num = t => { t = (t || '').trim(); if (!t) return 0; if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); const v = parseFloat(t); return isNaN(v) ? 0 : v; };
   const el = id => document.getElementById(id);
   function calc() {
-    const b = 1000, dd = r2(b * PDD), niv = el('pc-niv').checked ? r2(b * PNIV) : 0;
-    const bet = el('pc-bet').checked ? r2((b - dd - niv) * PBET) : 0;
-    const fl = r2(b * (parseInt(el('pc-fl').value || 0, 10)) / 100);
-    el('ex-dd').textContent = brl(dd); el('ex-niv').textContent = brl(niv); el('ex-bet').textContent = brl(bet);
-    el('ex-fl').textContent = brl(fl); el('ex-liq').textContent = brl(r2(b - dd - niv - bet - fl));
+    const vals = [...document.querySelectorAll('.base-mes')].map(i => num(i.value)).filter(v => v > 0);
+    const n = vals.length, media = n ? vals.reduce((a, b) => a + b, 0) / n : 0;
+    let cat = 'nova';
+    if (n) cat = media >= SM ? 'formada' : (media >= SM * FF ? 'formacao' : 'projecao');
+    const niv = n > 0 && media > SM * FN, betel = cat === 'formada';
+    const fl = n ? Math.floor((media - r2(media * PDD)) / SM) : 0;
+    const dd = r2(media * PDD), vniv = niv ? r2(media * PNIV) : 0, vbet = betel ? r2((media - dd - vniv) * PBET) : 0, vfl = r2(media * fl / 100);
+    el('r-media').textContent = brl(r2(media)) + (n ? ` (${n} meses)` : '');
+    el('r-cat').textContent = NOMES[cat];
+    el('r-niv').textContent = niv ? '(sim)' : '(não)'; el('r-bet').textContent = betel ? '(sim)' : '(não)'; el('r-fl').textContent = fl + '%';
+    el('ex-dd').textContent = brl(dd); el('ex-niv').textContent = brl(vniv); el('ex-bet').textContent = brl(vbet);
+    el('ex-fl').textContent = brl(vfl); el('ex-liq').textContent = brl(r2(media - dd - vniv - vbet - vfl));
   }
-  ['pc-niv', 'pc-bet', 'pc-fl'].forEach(i => el(i).addEventListener('input', calc));
+  document.querySelectorAll('.base-mes').forEach(i => i.addEventListener('input', calc));
   calc();
 })();
 </script>

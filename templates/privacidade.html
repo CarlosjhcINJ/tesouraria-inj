@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Privacidade e segurança — Tesouraria INJ</title>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet"/>
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  body { font-family: Inter, Arial, sans-serif; background: #eef1f6; color: #1b2340; }
+  .folha { max-width: 860px; margin: 24px auto; background: #fff; border-radius: 16px; padding: 28px 32px; box-shadow: 0 4px 18px rgba(26,58,92,.08); }
+  h1 { color: #25307a; font-weight: 800; font-size: 1.6rem; } h2 { color: #25307a; font-size: 1.1rem; font-weight: 700; margin-top: 1.6rem; }
+  .ok { color: #1e8449; } td, th { font-size: .92rem; }
+</style>
+</head>
+<body>
+<div class="folha">
+  <div class="d-flex align-items-center gap-3 mb-3">
+    <img src="{{ url_for('static', filename='img/logo-inj-160.png') }}" alt="Igreja do Nome de Jesus" style="width:72px"/>
+    <div><h1 class="mb-0">Privacidade e segurança</h1><div class="text-muted">Tesouraria INJ · quem vê os dados da sua congregação e como eles são protegidos</div></div>
+  </div>
+
+  <p class="lead">Os dados de cada congregação <b>não são públicos</b>. Ninguém vê nada sem usuário e senha, e cada congregação só vê os próprios lançamentos.</p>
+
+  <h2>Quem vê o quê</h2>
+  <table class="table table-sm align-middle">
+    <thead><tr><th>Pessoa</th><th>O que vê</th><th>O que não vê</th></tr></thead>
+    <tbody>
+      <tr><td><b>Tesoureiro(a) e pastor</b> da congregação</td><td>Só a própria congregação: lançamentos, dízimos, comprovantes, livros e relatórios</td><td>Nada de outra congregação</td></tr>
+      <tr><td><b>Tesouraria Nacional</b> (administração)</td><td>Todas as congregações, para conferir os envios (Regulamento Interno)</td><td>As senhas: ficam guardadas de forma que ninguém consegue lê-las, nem a nacional</td></tr>
+      <tr><td><b>Supervisor</b>, quando a nacional nomeia</td><td>Consulta, sem poder alterar nada</td><td>—</td></tr>
+      <tr><td><b>Qualquer outra pessoa</b> com o link</td><td>Só a tela de entrada</td><td>Todos os dados</td></tr>
+    </tbody>
+  </table>
+
+  <h2>Como os dados são protegidos</h2>
+  <ul class="list-unstyled">
+    <li class="mb-2"><i class="bi bi-check-circle-fill ok me-2"></i><b>Conexão protegida (https):</b> o que se digita viaja codificado entre o celular e o servidor.</li>
+    <li class="mb-2"><i class="bi bi-check-circle-fill ok me-2"></i><b>Senhas protegidas:</b> são guardadas embaralhadas; ninguém consegue lê-las, nem o administrador. Esqueceu a senha? A nacional cria uma nova.</li>
+    <li class="mb-2"><i class="bi bi-check-circle-fill ok me-2"></i><b>Bloqueio contra tentativas:</b> após 5 senhas erradas, o usuário fica bloqueado por 15 minutos.</li>
+    <li class="mb-2"><i class="bi bi-check-circle-fill ok me-2"></i><b>Saída automática:</b> após 30 minutos sem uso, o sistema fecha a sessão sozinho, para o caso de um celular esquecido ou um computador compartilhado.</li>
+    <li class="mb-2"><i class="bi bi-check-circle-fill ok me-2"></i><b>Separação por congregação:</b> o sistema confere em cada tela que o lançamento pertence à congregação de quem está entrando.</li>
+    <li class="mb-2"><i class="bi bi-check-circle-fill ok me-2"></i><b>Tudo registrado:</b> toda alteração e exclusão fica no histórico, com quem fez e quando. Nada some sem deixar rastro.</li>
+    <li class="mb-2"><i class="bi bi-check-circle-fill ok me-2"></i><b>Mês fechado é travado:</b> depois de fechado e aprovado, ninguém altera sem o pastor reabrir.</li>
+  </ul>
+
+  <h2>O que pedimos a cada usuário</h2>
+  <ol>
+    <li>Troque a senha inicial no primeiro acesso, em <b>Minha conta</b>.</li>
+    <li>Não compartilhe a senha, nem entre tesoureiro e pastor.</li>
+    <li>Use <b>Sair</b> ao terminar, principalmente em computador da igreja.</li>
+    <li>Não envie senhas em grupos de WhatsApp.</li>
+  </ol>
+
+  <p class="text-muted small mt-4 mb-0">Dúvidas: fale com a Tesouraria Nacional da Igreja do Nome de Jesus.</p>
+  <div class="mt-3"><a href="{{ url_for('login') }}" class="btn btn-primary"><i class="bi bi-box-arrow-in-right me-1"></i>Entrar no sistema</a></div>
+</div>
+</body>
+</html>

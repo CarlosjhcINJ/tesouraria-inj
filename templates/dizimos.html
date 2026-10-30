@@ -87,20 +87,29 @@
 
   <div class="col-lg-7">
     {% if historico %}
-    {% set total_bruto = historico | sum(attribute='dizimo_bruto') %}
-    {% set total_nac = historico | sum(attribute='valor_nacional') %}
-    {% set total_fl = historico | sum(attribute='valor_fundo_local') %}
-    {% set total_liq = historico | sum(attribute='valor_liquido') %}
+    {% set total_bruto = por_mes | sum(attribute='bruto') %}
+    {% set total_nac = por_mes | sum(attribute='nac') %}
+    {% set total_fl = por_mes | sum(attribute='fl') %}
+    {% set total_liq = por_mes | sum(attribute='liq') %}
     <div class="row g-3 mb-3">
       <div class="col-6 col-md-3"><div class="stat-card dizimo position-relative"><div class="stat-label">Dízimo total</div><div class="stat-value" style="font-size:1.1rem">{{ total_bruto | brl }}</div></div></div>
       <div class="col-6 col-md-3"><div class="stat-card saida position-relative"><div class="stat-label">Envio nacional</div><div class="stat-value" style="font-size:1.1rem">{{ total_nac | brl }}</div></div></div>
       <div class="col-6 col-md-3"><div class="stat-card saldo position-relative"><div class="stat-label">Fundo local</div><div class="stat-value" style="font-size:1.1rem">{{ total_fl | brl }}</div></div></div>
       <div class="col-6 col-md-3"><div class="stat-card entrada position-relative"><div class="stat-label">Sustento pastoral</div><div class="stat-value" style="font-size:1.1rem">{{ total_liq | brl }}</div></div></div>
     </div>
+    <div class="table-card mb-3">
+      <div class="table-header"><h6 class="mb-0"><i class="bi bi-calendar3 me-2 text-primary"></i>Liquidação por mês (valor oficial do fechamento)</h6></div>
+      <div class="table-responsive"><table class="table table-sm mb-0">
+        <thead><tr><th>Mês</th><th class="text-end">Bruto</th><th class="text-end">Envio nacional</th><th class="text-end">Fundo local</th><th class="text-end">Sustento</th></tr></thead>
+        <tbody>{% for x in por_mes %}<tr><td class="fw-semibold">{{ x.mes | capitalize }}</td><td class="text-end">{{ x.bruto | brl }}</td>
+          <td class="text-end text-danger">{{ x.nac | brl }}</td><td class="text-end" style="color:#2980b9">{{ x.fl | brl }}</td><td class="text-end fw-bold text-entrada">{{ x.liq | brl }}</td></tr>{% endfor %}</tbody>
+      </table></div>
+      <div class="small text-muted px-3 py-2">O sistema soma todos os dízimos do mês e divide uma vez, como no fechamento. A divisão de cada registro abaixo é só uma prévia e pode diferir em centavos.</div>
+    </div>
     {% endif %}
 
     <div class="table-card">
-      <div class="table-header"><h6><i class="bi bi-clock-history me-2 text-primary"></i>Registros de {{ ano_sel }}</h6></div>
+      <div class="table-header"><h6><i class="bi bi-clock-history me-2 text-primary"></i>Registros de {{ ano_sel }} (cada culto ou entrega)</h6></div>
       <div class="table-responsive">
         <table class="table table-hover mb-0">
           <thead><tr><th>Mês</th><th>Data</th><th class="text-end">Bruto</th><th class="text-end">Envio nacional</th><th class="text-end">F. local</th><th class="text-end">Sustento</th><th>Obs</th><th></th></tr></thead>

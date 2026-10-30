@@ -430,3 +430,10 @@ body {
 .input-group > .senha-caixa { width: 1%; min-width: 0; }
 .btn-ver-senha { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: #5d6d7e; padding: 2px 6px; z-index: 5; }
 .btn-ver-senha:hover { color: #1a3a5c; }
+.table td.text-end, .table th.text-end { white-space: nowrap; }
+@media (max-width: 576px) {
+  .stat-card .stat-value { font-size: 1.15rem; }
+  .stat-card .stat-label { font-size: .65rem; }
+  .guia-grande b { font-size: 1.15rem; }
+  .guia-grande .bi-arrow-down-circle-fill, .guia-grande .bi-arrow-up-circle-fill { font-size: 2rem; }
+}

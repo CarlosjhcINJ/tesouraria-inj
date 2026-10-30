@@ -81,7 +81,7 @@
   </div>
   <div class="col-6 col-lg-3">
     <div class="stat-card saldo">
-      <div class="stat-label">Superávit</div>
+      <div class="stat-label">Resultado ({{ "sobrou" if superavit >= 0 else "faltou" }})</div>
       <div class="stat-value {% if superavit >= 0 %}text-entrada{% else %}text-saida{% endif %}">{{ superavit | brl }}</div>
       <div class="stat-sub">{{ pct }}% das entradas</div>
     </div>
@@ -180,7 +180,7 @@
         <tr>
           <td class="text-muted small">{{ t['id'] }}</td>
           <td>
-            <span class="badge rounded-pill livro-{{ t['livro'] }}" style="font-size:0.65rem">{{ t['livro'] }}</span>
+            <span class="badge rounded-pill livro-{{ t['livro'] }}" style="font-size:0.65rem">{{ livros_labels.get(t['livro'], t['livro']) }}</span>
           </td>
           <td>
             <span class="badge {% if t['tipo']=='Entrada' %}badge-entrada{% else %}badge-saida{% endif %} rounded-pill px-2" style="font-size:0.68rem">

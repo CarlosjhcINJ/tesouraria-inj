@@ -182,7 +182,7 @@ function setupDizimoCalc() {
   const elFL      = document.getElementById('calcFundoLocal');
   const elLiquido = document.getElementById('calcLiquido');
 
-  if (!bruto) return;
+  if (!bruto || !pctNac || !pctFL) return;   // tela nova de dízimos tem o próprio cálculo
 
   function calcular() {
     const b  = parseFloat(bruto.value.replace(',', '.')) || 0;

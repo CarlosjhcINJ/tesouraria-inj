@@ -27,7 +27,7 @@
       <span class="badge bg-success-subtle text-success-emphasis p-2"><i class="bi bi-check-circle me-1"></i>Confirmada por {{ carta.confirmado_nome }} em {{ c['confirmado_em'] | data }}</span>
     {% else %}
       <span class="badge bg-warning-subtle text-warning-emphasis p-2"><i class="bi bi-hourglass-split me-1"></i>Aguardando confirmação do pastor</span>
-      {% if papel == 'pastor' %}
+      {% if e_papel('pastor') %}
       <form method="POST" action="{{ url_for('carta_confirmar', ano=ano) }}" class="d-inline ms-2">
         <button class="btn btn-sm btn-success"><i class="bi bi-check2 me-1"></i>Confirmar que recebi e li a carta</button>
       </form>

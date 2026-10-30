@@ -425,3 +425,8 @@ body {
 .livro-escolha b { font-size: 1.1rem; }
 .livro-escolha small { color: #7f8c9a; }
 .badge-livro { display: inline-block; background: #1a3a5c; color: #fff; border-radius: 999px; padding: 3px 12px; font-size: .8rem; font-weight: 600; }
+.senha-caixa { position: relative; display: block; flex: 1 1 auto; }
+.senha-caixa input { padding-right: 2.6rem !important; width: 100%; }
+.input-group > .senha-caixa { width: 1%; min-width: 0; }
+.btn-ver-senha { position: absolute; right: 6px; top: 50%; transform: translateY(-50%); border: 0; background: transparent; color: #5d6d7e; padding: 2px 6px; z-index: 5; }
+.btn-ver-senha:hover { color: #1a3a5c; }

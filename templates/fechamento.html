@@ -67,7 +67,7 @@
     <div class="form-card h-100">
       <div class="form-section-title"><i class="bi bi-check2-square me-2"></i>Próximo passo</div>
       {% if st == 'aberto' %}
-        {% if calc and papel == 'tesoureiro' %}
+        {% if calc and e_papel('tesoureiro') %}
           <p>Total a enviar: <strong class="fs-5">{{ calc.total | brl }}</strong></p>
           <form method="POST" action="{{ url_for('fechamento_fechar') }}" onsubmit="return confirm('Fechar {{ nome_mes }}/{{ ano }}? Depois disso não dá para lançar nem corrigir este mês sem o pastor reabrir.')">
             <input type="hidden" name="ano" value="{{ ano }}"/><input type="hidden" name="mes" value="{{ mes }}"/>
@@ -78,7 +78,7 @@
         {% endif %}
       {% elif st == 'fechado' %}
         <p>O tesoureiro fechou o mês. Total a enviar: <strong>{{ f['total'] | brl }}</strong>.</p>
-        {% if papel == 'pastor' %}
+        {% if e_papel('pastor') %}
           <form method="POST" action="{{ url_for('fechamento_aprovar', fid=f['id']) }}" class="mb-3">
             <button class="btn btn-success"><i class="bi bi-check-circle me-2"></i>Aprovar relatório</button>
           </form>
@@ -93,7 +93,7 @@
           <div>Conta {{ nacional.conta }}</div>
           <div>Pix: {{ nacional.pix }}</div>
         </div>
-        {% if papel == 'tesoureiro' %}
+        {% if e_papel('tesoureiro') %}
         <form method="POST" action="{{ url_for('fechamento_comprovante', fid=f['id']) }}" enctype="multipart/form-data">
           <div class="row g-2 mb-2">
             <div class="col-6"><label class="form-label">Valor do comprovante</label>
@@ -118,7 +118,7 @@
         <p class="mb-0">{{ 'A Tesouraria Nacional confirmou o recebimento em ' ~ (f['recebido_em'] | data) ~ '.' if st == 'recebido' else 'Aguardando a Tesouraria Nacional confirmar o recebimento.' }}</p>
       {% endif %}
 
-      {% if f and papel == 'pastor' and st != 'recebido' %}
+      {% if f and e_papel('pastor') and st != 'recebido' %}
         <hr/>
         <details>
           <summary class="small text-muted">Reabrir o mês para correção</summary>

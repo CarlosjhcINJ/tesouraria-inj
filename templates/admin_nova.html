@@ -15,14 +15,18 @@
           <label class="form-label">Nome da congregação</label>
           <input type="text" name="nome" class="form-control" required placeholder="Ex.: Vila Ramos/SP"/>
         </div>
+        <div class="form-check form-switch mb-3 p-3 rounded" style="background:#f6f8fc;padding-left:3rem!important">
+          <input class="form-check-input" type="checkbox" role="switch" name="usuario_unico" value="1" id="usuario-unico">
+          <label class="form-check-label" for="usuario-unico"><b>O pastor também é o tesoureiro</b> (congregação pequena: um só usuário faz os lançamentos, confirma e aprova)</label>
+        </div>
         <div class="row g-4">
           <div class="col-md-6">
-            <div class="fw-semibold mb-2"><i class="bi bi-person-check me-1"></i>Tesoureiro(a)</div>
+            <div class="fw-semibold mb-2"><i class="bi bi-person-check me-1"></i><span id="titulo-tes">Tesoureiro(a)</span></div>
             <label class="form-label small">Nome</label><input type="text" name="tes_nome" class="form-control form-control-sm mb-2" required/>
             <label class="form-label small">Usuário</label><input type="text" name="tes_usuario" class="form-control form-control-sm mb-2" required pattern="[a-z0-9._\-]+" placeholder="ex.: vilaramos.tesouraria"/>
             <label class="form-label small">Senha inicial</label><input type="password" name="tes_senha" class="form-control form-control-sm" required minlength="8"/>
           </div>
-          <div class="col-md-6">
+          <div class="col-md-6" id="bloco-pastor">
             <div class="fw-semibold mb-2"><i class="bi bi-person-circle me-1"></i>Pastor</div>
             <label class="form-label small">Nome</label><input type="text" name="pas_nome" class="form-control form-control-sm mb-2"/>
             <label class="form-label small">Usuário</label><input type="text" name="pas_usuario" class="form-control form-control-sm mb-2" pattern="[a-z0-9._\-]+" placeholder="ex.: vilaramos.pastor"/>
@@ -30,7 +34,7 @@
           </div>
         </div>
         <div class="alert alert-info py-2 px-3 mt-4 small mb-0">
-          Os dados desta congregação ficam separados das outras. Uma congregação nova começa do zero: emita a carta anual dela em “Cartas anuais”.
+          Os dados desta congregação ficam separados das outras. Ao cadastrar, o sistema abre a tesouraria dela para fazer o 1º Cadastro (nomes e dízimos do ano anterior). Congregação nova começa do zero.
         </div>
         <div class="d-flex gap-2 mt-4">
           <a href="{{ url_for('admin') }}" class="btn btn-outline-secondary flex-fill">Cancelar</a>
@@ -40,4 +44,14 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const sw = document.getElementById('usuario-unico'), bloco = document.getElementById('bloco-pastor'), tit = document.getElementById('titulo-tes');
+  function aplicar() { bloco.hidden = sw.checked; tit.textContent = sw.checked ? 'Pastor e tesoureiro (um só usuário)' : 'Tesoureiro(a)'; }
+  sw.addEventListener('change', aplicar); aplicar();
+})();
+</script>
 {% endblock %}

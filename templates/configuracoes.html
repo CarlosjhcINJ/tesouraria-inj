@@ -77,7 +77,7 @@
           {% if travado %}Para mudar, fale com a Tesouraria Nacional.{% endif %}</div>
         {% else %}
         <div class="alert alert-warning py-2 small"><i class="bi bi-hourglass-split me-1"></i>{{ comp['observacao'] or 'Emitida' }}. Falta o pastor confirmar
-          {% if papel == 'pastor' %}— ao salvar abaixo, você confirma.{% else %}(o pastor entra e salva esta tela, ou confirma na <a href="{{ url_for('carta', ano=ano) }}">carta anual</a>).{% endif %}</div>
+          {% if e_papel('pastor') %}— ao salvar abaixo, você confirma.{% else %}(o pastor entra e salva esta tela, ou confirma na <a href="{{ url_for('carta', ano=ano) }}">carta anual</a>).{% endif %}</div>
         {% endif %}
       {% endif %}
 
@@ -112,7 +112,7 @@
           <div class="calc-linha"><span>Aporte ao fundo local <b id="r-fl"></b></span><b id="ex-fl">—</b></div>
           <div class="calc-linha total"><span>Sustento pastoral</span><b id="ex-liq">—</b></div>
         </div>
-        <button class="btn btn-primary w-100"><i class="bi bi-calculator me-2"></i>{{ 'Calcular, salvar e confirmar' if papel == 'pastor' else 'Calcular e salvar' }}</button>
+        <button class="btn btn-primary w-100"><i class="bi bi-calculator me-2"></i>{{ 'Calcular, salvar e confirmar' if e_papel('pastor') else 'Calcular e salvar' }}</button>
         </fieldset>
       </form>
       <div class="form-text mt-2">Regras do Regulamento Interno: plenamente formada com média a partir de 1 salário mínimo; em formação a partir de

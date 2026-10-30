@@ -69,10 +69,9 @@
     <div class="nav-section mt-2">FIM DO MÊS</div>
     <a href="{{ url_for('fechamento') }}" class="nav-item {% if ep == 'fechamento' %}active{% endif %}"><i class="bi bi-lock"></i> Fechar o mês</a>
     <a href="{{ url_for('imprimir') }}" class="nav-item {% if ep == 'imprimir' %}active{% endif %}"><i class="bi bi-printer"></i> Imprimir (livros, recibos, envios)</a>
-    <a href="{{ url_for('exportar_excel') }}" class="nav-item"><i class="bi bi-file-earmark-spreadsheet"></i> Exportar (Excel / Google)</a>
     <a href="{{ url_for('balanco') }}" class="nav-item {% if ep == 'balanco' %}active{% endif %}"><i class="bi bi-clipboard-data"></i> Balanço e gráficos</a>
-    <a href="{{ url_for('relatorio') }}" class="nav-item {% if ep == 'relatorio' %}active{% endif %}"><i class="bi bi-bar-chart-line"></i> Relatórios</a>
-    <a href="{{ url_for('visao_geral') }}" class="nav-item {% if ep == 'visao_geral' %}active{% endif %}"><i class="bi bi-graph-up"></i> Gráficos do ano</a>
+    <a href="{{ url_for('relatorio') }}" class="nav-item {% if ep == 'relatorio' %}active{% endif %}"><i class="bi bi-search"></i> Pesquisar lançamentos</a>
+    <a href="{{ url_for('exportar_excel') }}" class="nav-item"><i class="bi bi-file-earmark-spreadsheet"></i> Exportar (Excel / Google)</a>
     <a href="{{ url_for('carta') }}" class="nav-item {% if ep == 'carta' %}active{% endif %}"><i class="bi bi-envelope-paper"></i> Carta anual</a>
     {% endif %}
     <div class="nav-section mt-2">SISTEMA</div>

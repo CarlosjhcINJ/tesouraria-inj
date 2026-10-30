@@ -36,7 +36,7 @@ TIPOS_ANEXO = {'application/pdf', 'image/jpeg', 'image/png', 'image/webp'}
 
 LIVROS = ['FundoLocal', 'Projetos', 'Envios', 'LiqDízimos']
 LIVROS_LABELS = {
-    'FundoLocal': 'Fundo Local',
+    'FundoLocal': 'Caixa local',
     'Projetos': 'Projetos',
     'Envios': 'Envios / Missões',
     'LiqDízimos': 'Liquidação de Dízimos',
@@ -748,6 +748,10 @@ def dashboard():
 @app.route('/visao-geral')
 @cong_required
 def visao_geral():
+    return redirect(url_for('balanco', ano=request.args.get('ano', date.today().year)))   # unificado no Balanço
+
+
+def _visao_geral_antiga():
     cfg = get_cfg()
     cid = get_cong_id()
     ano = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
@@ -878,13 +882,16 @@ def lancamentos():
         lista = conn.execute(q, p).fetchall()
         travados = {MESES[f['mes'] - 1] for f in
                     conn.execute('SELECT mes FROM fechamentos WHERE cong_id=? AND ano=?', (cid, ano_sel)).fetchall()}
-    vis = [t for t in lista if not t.get('transferencia')]
+    # Num livro só, os repasses internos contam (o aporte dos dízimos é entrada do caixa local);
+    # em "todos os lançamentos" não contam, para não somar o mesmo dinheiro duas vezes.
+    vis = lista if livro_sel in LIVROS else [t for t in lista if not t.get('transferencia')]
     total_e = sum(t['valor'] for t in vis if t['tipo'] == 'Entrada')
     total_s = sum(t['valor'] for t in vis if t['tipo'] == 'Saída')
+    saldo_inicial = float(cfg.get('saldo_ano_anterior', 0) or 0) if livro_sel == 'FundoLocal' and not mes_sel else 0.0
     return render_template('lancamentos.html',
         cfg=cfg, categorias=CATEGORIAS, meses=MESES, anos=ANOS, livros=LIVROS, formas=FORMAS,
         livros_labels=LIVROS_LABELS, transacoes=lista, travados=travados,
-        ano_sel=ano_sel, mes_sel=mes_sel, livro_sel=livro_sel, total_e=total_e, total_s=total_s)
+        ano_sel=ano_sel, mes_sel=mes_sel, livro_sel=livro_sel, total_e=total_e, total_s=total_s, saldo_inicial=saldo_inicial)
 
 
 GRUPOS_LANCAR = {
@@ -1077,9 +1084,8 @@ def balanco():
                 f'''SELECT livro, item, SUM(valor) AS t FROM transacoes WHERE cong_id=? AND ano=? AND tipo=? AND {real}
                     AND mes IN ({mk}) GROUP BY livro, item ORDER BY t DESC''', (cid, ano, tipo, *meses_sel)).fetchall()]
         entradas, saidas = por_item('Entrada'), por_item('Saída')
-        diz = conn.execute(f'''SELECT COALESCE(SUM(dizimo_bruto),0) AS bruto, COALESCE(SUM(valor_nacional),0) AS nac,
-                                 COALESCE(SUM(valor_fundo_local),0) AS fl, COALESCE(SUM(valor_liquido),0) AS liq
-                              FROM dizimos WHERE cong_id=? AND ano=? AND mes IN ({mk})''', (cid, ano, *meses_sel)).fetchone()
+        lm = liquidacao_por_mes(conn, cid, ano, meses_sel)
+        diz = {k: round(sum(x[k] for x in lm), 2) for k in ('bruto', 'nac', 'fl', 'liq')}
         mensal, acum = [], saldo_ano_ant
         for m in MESES:
             r = conn.execute(f'''SELECT COALESCE(SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END),0) AS e,
@@ -1212,6 +1218,21 @@ def compromisso_de(conn, cid, ano):
             'confirmado': bool(c['confirmado_em']), 'id': c['id']}
 
 
+def liquidacao_por_mes(conn, cid, ano, meses=None):
+    """Liquidação oficial de cada mês: o total do mês dividido uma vez (igual ao fechamento)."""
+    comp = compromisso_de(conn, cid, ano) or {'categoria': 'nova', 'nivelacao': False, 'fundo_local_pct': 0, 'betel': False}
+    out = []
+    for m in (meses or MESES):
+        bruto = float(conn.execute('SELECT COALESCE(SUM(dizimo_bruto),0) AS t FROM dizimos WHERE cong_id=? AND ano=? AND mes=?',
+                                   (cid, ano, m)).fetchone()['t'])
+        if not bruto:
+            continue
+        liq = R.liquidar_dizimo(bruto, comp, regras_em(conn, f'{ano}-{R.mes_num(m):02d}-01'))
+        out.append({'mes': m, 'bruto': liq['bruto'], 'dd': liq['dd'], 'niv': liq['niv'], 'betel': liq['betel'],
+                    'nac': round(liq['dd'] + liq['niv'] + liq['betel'], 2), 'fl': liq['fundo_local'], 'liq': liq['liquido']})
+    return out
+
+
 @app.route('/dizimos', methods=['GET', 'POST'])
 @cong_required
 def dizimos():
@@ -1258,8 +1279,9 @@ def dizimos():
                                  (cid, ano_sel)).fetchall()
         comp = compromisso_de(conn, cid, ano_sel)
         reg = regras_em(conn, f'{ano_sel}-12-31')
+        por_mes = liquidacao_por_mes(conn, cid, ano_sel)
     return render_template('dizimos.html', cfg=cfg, meses=MESES, anos=ANOS, ano_sel=ano_sel,
-                           historico=historico, comp=comp, reg=reg)
+                           historico=historico, comp=comp, reg=reg, por_mes=por_mes)
 
 
 @app.route('/dizimos/<int:did>/deletar', methods=['POST'])
@@ -1361,7 +1383,7 @@ def fechamento_fechar():
             return redirect(url_for('fechamento', ano=ano, mes=mes))
         calc, _ = calcular_mes(conn, cid, ano, mes)
         if not calc:
-            flash(f'A carta anual de {ano} ainda não foi emitida pela Tesouraria Nacional. Sem ela não há percentuais para fechar o mês.', 'danger')
+            flash(f'Falta a classificação de {ano}. Complete o 1º Cadastro da congregação (dízimos do ano anterior) antes de fechar o mês.', 'danger')
             return redirect(url_for('fechamento', ano=ano, mes=mes))
         fid = conn.insert('INSERT INTO fechamentos (cong_id, ano, mes, status, calculo, total, fechado_por) VALUES (?,?,?,?,?,?,?)',
                           (cid, ano, mes, 'fechado', json.dumps(calc, ensure_ascii=False), calc['total'], session['user_id']))
@@ -1612,10 +1634,11 @@ def relatorio():
             s = sum(r['t'] for r in rows if r['tipo'] == 'Saída')
             if e > 0 or s > 0:
                 resumo_mensal.append({'mes': mes, 'entradas': e, 'saidas': s, 'saldo': e - s})
+        # por livro: inclui os repasses internos (ex.: aporte dos dízimos ao caixa local), senão o saldo do livro fica errado
         resumo_livro = conn.execute('''SELECT livro,
                    SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END) AS e,
                    SUM(CASE WHEN tipo='Saída' THEN valor ELSE 0 END) AS s
-            FROM transacoes WHERE cong_id=? AND ano=? AND COALESCE(transferencia,0)=0 GROUP BY livro''', (cid, ano_sel)).fetchall()
+            FROM transacoes WHERE cong_id=? AND ano=? GROUP BY livro''', (cid, ano_sel)).fetchall()
         items_disp = conn.execute('SELECT DISTINCT item FROM transacoes WHERE cong_id=? AND ano=? ORDER BY item',
                                   (cid, ano_sel)).fetchall()
     return render_template('relatorio.html', cfg=cfg, anos=ANOS, meses=MESES, livros=LIVROS, livros_labels=LIVROS_LABELS,
@@ -2219,24 +2242,34 @@ def exportar_excel():
         for c in (5, 6, 7):
             ws.cell(r, c).number_format = MOEDA
 
-    # 4. Dízimos e liquidação
+    # 4. Dízimos: liquidação oficial por mês (igual ao fechamento) e os registros
+    with get_db() as conn:
+        lm = liquidacao_por_mes(conn, cid, ano)
     ws = wb.create_sheet('Dízimos')
     titulo(ws, f'Dízimos e liquidação — {ano}', 7)
-    cabec(ws, 5, ['Mês', 'Data', 'Dízimo bruto', 'Enviado à nacional', 'Fundo local', 'Sustento pastoral', 'Observação'],
-          [11, 12, 16, 18, 15, 18, 34])
+    cabec(ws, 5, ['Mês', 'Dízimo bruto', 'Dízimo dos Dízimos', 'Nivelação', 'Betel', 'Fundo local', 'Sustento pastoral'],
+          [12, 16, 18, 14, 14, 15, 18])
     r = 6
-    for d in diz:
-        for ci, v in enumerate([d['mes'].capitalize(), d['data_registro'] or '', d['dizimo_bruto'], d['valor_nacional'] or 0,
-                                d['valor_fundo_local'] or 0, d['valor_liquido'] or 0, d['obs'] or ''], 1):
+    for x in lm:
+        for ci, v in enumerate([x['mes'].capitalize(), x['bruto'], x['dd'], x['niv'], x['betel'], x['fl'], x['liq']], 1):
             c = ws.cell(r, ci, v)
-            if 3 <= ci <= 6:
+            if ci >= 2:
                 c.number_format = MOEDA
         r += 1
     ws.cell(r, 1, 'TOTAL').font = B
-    for ci in range(3, 7):
+    for ci in range(2, 8):
         col = get_column_letter(ci)
         c = ws.cell(r, ci, f'=SUM({col}6:{col}{r - 1})' if r > 6 else 0)
         c.number_format, c.font = MOEDA, B
+    r += 2
+    ws.cell(r, 1, 'Registros de dízimo (cada culto ou entrega)').font = B
+    r += 1
+    for ci, h in enumerate(['Mês', 'Data', 'Dízimo bruto', 'Observação'], 1):
+        c = ws.cell(r, ci, h); c.font, c.fill = BR, NAVY
+    for d in diz:
+        r += 1
+        ws.cell(r, 1, d['mes'].capitalize()); ws.cell(r, 2, d['data_registro'] or '')
+        ws.cell(r, 3, d['dizimo_bruto']).number_format = MOEDA; ws.cell(r, 4, d['obs'] or '')
 
     # 5. Resumo mensal
     ws = wb.create_sheet('Resumo mensal')

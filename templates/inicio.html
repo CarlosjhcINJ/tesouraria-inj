@@ -81,7 +81,7 @@
   {% for lv, v in livros.items() %}
   <div class="col-6 col-lg-3">
     <a href="{{ url_for('lancamentos', ano=ano, mes=nome_mes, livro=lv) }}" class="livro-card">
-      <div class="fw-bold"><i class="bi {{ icones[lv] }} me-1"></i>{{ 'Caixa local' if lv == 'FundoLocal' else livros_labels[lv] }}</div>
+      <div class="fw-bold"><i class="bi {{ icones[lv] }} me-1"></i>{{ livros_labels[lv] }}</div>
       <div class="small text-entrada">+ {{ v.e | brl }}</div>
       <div class="small text-saida">− {{ v.s | brl }}</div>
     </a>
@@ -128,11 +128,10 @@
       <tbody>
         {% for t in recentes %}
         <tr>
-          <td class="small text-muted">{{ t['data_registro'] or '' }}</td>
-          <td class="small">{{ livros_labels[t['livro']] if t['livro'] != 'FundoLocal' else 'Caixa local' }}</td>
-          <td class="small">{{ t['item'] }}</td>
+          <td class="small"><div class="fw-semibold">{{ t['item'] }}</div>
+            <div class="text-muted" style="font-size:.75rem">{{ t['data_registro'] or '' }} · {{ livros_labels[t['livro']] }}{% if t['pessoa'] %} · {{ t['pessoa'] }}{% endif %}</div></td>
           <td class="text-end fw-semibold {% if t['tipo']=='Entrada' %}text-entrada{% else %}text-saida{% endif %}">{{ '+' if t['tipo']=='Entrada' else '−' }} {{ t['valor'] | brl }}</td>
-          <td class="text-end"><a href="{{ url_for('recibo', tipo='lancamento', rid=t['id']) }}" target="_blank" title="Recibo" class="btn btn-sm btn-link py-0"><i class="bi bi-receipt"></i></a></td>
+          <td class="text-end" style="width:40px"><a href="{{ url_for('recibo', tipo='lancamento', rid=t['id']) }}" target="_blank" title="Recibo" class="btn btn-sm btn-link py-0"><i class="bi bi-receipt"></i></a></td>
         </tr>
         {% else %}
         <tr><td class="text-center text-muted py-4">Nenhum lançamento ainda. Comece por “Registrar ENTRADA”.</td></tr>

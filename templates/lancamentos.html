@@ -28,7 +28,7 @@
           <select name="livro" id="livroSelect" class="form-select" required>
             <option value="">— Selecione o livro —</option>
             {% for livro in livros %}
-              <option value="{{ livro }}">{{ livros_labels[livro] }}</option>
+              <option value="{{ livro }}" {% if livro == livro_sel %}selected{% endif %}>{{ livros_labels[livro] }}</option>
             {% endfor %}
           </select>
         </div>
@@ -164,8 +164,8 @@
       </div>
       <div class="col-4">
         <div class="p-3 rounded-xl" style="background:#d6eaf8; border-left:4px solid #2980b9">
-          <div class="small text-muted">Saldo</div>
-          {% set saldo = total_e - total_s %}
+          <div class="small text-muted">{% if saldo_inicial %}Saldo (com {{ saldo_inicial | brl }} do início do ano){% elif mes_sel %}Resultado do mês{% else %}Saldo{% endif %}</div>
+          {% set saldo = saldo_inicial + total_e - total_s %}
           <div class="fw-bold {% if saldo >= 0 %}text-entrada{% else %}text-saida{% endif %}">{{ saldo | brl }}</div>
         </div>
       </div>
@@ -190,7 +190,7 @@
               <td class="text-muted small">{{ t['id'] }}</td>
               <td>
                 <span class="badge rounded-pill livro-{{ t['livro'] }}" style="font-size:0.65rem">
-                  {{ t['livro'] }}
+                  {{ livros_labels.get(t['livro'], t['livro']) }}
                 </span>
               </td>
               <td>

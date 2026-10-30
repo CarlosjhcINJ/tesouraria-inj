@@ -2,615 +2,115 @@
 {% block title %}Tutorial — Tesouraria INJ{% endblock %}
 {% block breadcrumb %}<li class="breadcrumb-item active">Tutorial</li>{% endblock %}
 
+
+
 {% block content %}
+{% set secoes = [
+  ('s0', 'bi-box-arrow-in-right', 'Entrar no sistema', 'Endereço, usuário e senha', [
+    ('Abra o sistema', 'No celular ou no computador, acesse <b>tesouraria-inj.onrender.com</b>. Se o sistema estiver “dormindo”, o primeiro acesso leva cerca de 1 minuto.'),
+    ('Entre com seu usuário', 'Use o usuário e a senha que a Tesouraria Nacional entregou. Cada pessoa tem o seu: o tesoureiro lança, o pastor confere e aprova.'),
+    ('Troque a senha', 'No primeiro acesso, vá em <b>Minha conta</b> e troque a senha. Não compartilhe a senha com ninguém.'),
+  ], ('warning', 'Depois de 5 senhas erradas, o acesso fica bloqueado por 15 minutos.')),
+  ('s1', 'bi-person-vcard', '1º Cadastro da congregação (obrigatório)', 'Sem o cadastro, o sistema não libera nenhum lançamento', [
+    ('Responsáveis', 'Em <b>1º Cadastro da congregação</b>, preencha o nome do pastor e do tesoureiro, o endereço e o saldo em caixa no início do ano. Esses nomes saem em todos os livros, recibos e no relatório dos envios.'),
+    ('Dízimos do ano anterior', 'Digite o dízimo bruto de cada mês (de dezembro do ano retrasado a novembro do ano passado). Os meses que já estão no sistema vêm preenchidos sozinhos.'),
+    ('O sistema define a classificação', 'Com a média, o sistema define sozinho se a congregação é <b>plenamente formada, em formação, em projeção ou nova</b>, se paga <b>nivelação</b>, se contribui com a <b>Betel</b> e o <b>% do fundo local</b>. Abaixo aparece o exemplo da liquidação de um mês.'),
+    ('Calcular e salvar', 'Clique em <b>Calcular e salvar</b>. Congregação nova deixa tudo em zero: começa do zero.'),
+    ('O pastor confirma', 'O pastor entra com o usuário dele, abre a mesma tela e clica em <b>Calcular, salvar e confirmar</b>. Depois de confirmada, só a Tesouraria Nacional pode mudar.'),
+  ], ('info', 'Se a congregação recebeu a carta anual da nacional, as porcentagens já aparecem prontas: basta o pastor confirmar.')),
+  ('s2', 'bi-pie-chart', 'Orçamento do ano', 'Quanto a congregação espera receber e gastar', [
+    ('Abra o orçamento', 'Na página inicial, clique em <b>1 · Orçamento do ano</b>.'),
+    ('Preencha por item', 'Digite o valor anual de cada entrada e saída prevista (aluguel, água e luz, evangelismo…). O sistema divide por 12.'),
+    ('Acompanhe', 'A página inicial mostra quanto do orçamento já foi gasto. O Balanço mostra o orçado x realizado de cada item.'),
+  ], None),
+  ('s3', 'bi-arrow-down-up', 'Registrar ENTRADA ou SAÍDA', 'Os lançamentos começam pelos dois botões grandes da página inicial', [
+    ('Entrada ou saída', 'Clique em <b>ENTRADA</b> (verde, dinheiro que entrou) ou <b>SAÍDA</b> (vermelho, dinheiro que saiu).'),
+    ('Escolha o livro', 'Todo lançamento pertence a um livro: <b>Caixa local</b> (ofertas e despesas do dia a dia), <b>Projetos</b> (cantina, brechó, construção) ou <b>Envios</b> (ofertas que vão para a nacional: missionária, Raios de Luz, Safras, distritais).'),
+    ('Escolha o tipo', 'Aparecem só os tipos daquele livro. Exemplo: Caixa local → Saída → Aluguel do Salão.'),
+    ('Valor, data e nome', 'Digite o valor, a data, a forma (dinheiro, Pix, banco) e o nome de quem entregou ou de quem recebeu. O nome sai no recibo.'),
+    ('Comprovante', 'Em toda <b>saída</b>, anexe a foto do recibo ou da nota (§ 95). No celular, dá para tirar a foto na hora.'),
+    ('Imprima o recibo', 'Depois de registrar, aparece o botão <b>Imprimir recibo</b>: sai em duas vias, com o valor por extenso e as assinaturas.'),
+  ], ('warning', 'Mês fechado não aceita lançamento. Para corrigir, o pastor precisa reabrir o mês (fica registrado no histórico).')),
+  ('s4', 'bi-cash-coin', 'Registrar DÍZIMOS', 'A liquidação é feita sozinha, pela classificação do cadastro', [
+    ('Abra Dízimos', 'Na página inicial, clique em <b>DÍZIMOS</b>.'),
+    ('Digite o dízimo bruto', 'Informe o valor bruto e o mês. Pode registrar por culto ou o total do mês.'),
+    ('Veja a liquidação', 'O sistema separa: Dízimo dos Dízimos 10%, nivelação 5% (se houver), Betel 4% do líquido (se houver), aporte ao fundo local e o sustento pastoral (§ 66).'),
+    ('Recibo', 'Cada registro de dízimo também tem recibo.'),
+  ], None),
+  ('s5', 'bi-journals', 'Livros', 'Caixa local, Projetos, Envios e Liquidação de dízimos', [
+    ('Consultar', 'No menu <b>LIVROS</b>, abra o livro desejado. Cada lançamento aparece com data, tipo, valor, comprovante e recibo.'),
+    ('Corrigir', 'Use o lápis para editar ou a lixeira para excluir. Toda alteração fica no histórico da Tesouraria Nacional.'),
+  ], None),
+  ('s6', 'bi-lock', 'Fechar o mês e relatório dos envios', 'No começo do mês seguinte, até o dia 5', [
+    ('Fechar', 'Em <b>Fechar o mês</b>, confira o cálculo dos envios e clique em fechar. O sistema lança sozinho as saídas da liquidação e dos envios.'),
+    ('Pastor aprova', 'O pastor entra e aprova o fechamento.'),
+    ('Deposite e anexe', 'Faça o depósito na conta nacional e anexe o comprovante do banco no fechamento.'),
+    ('Relatório', 'Imprima o <b>relatório dos envios</b> com os nomes do pastor e do tesoureiro. A nacional confere e marca como recebido.'),
+  ], None),
+  ('s7', 'bi-printer', 'Imprimir livros, balanço e recibos', 'Tudo sai com a logo e os nomes dos responsáveis', [
+    ('Página Imprimir', 'No menu, clique em <b>Imprimir</b>. Escolha o mês e o ano.'),
+    ('Livros', 'Livro caixa completo do mês ou do ano, ou um livro só (Caixa local, Projetos, Envios, Liquidação), com saldo corrido e assinaturas.'),
+    ('Balanço', 'Balanço do mês ou do ano, com gráficos: entradas e saídas mês a mês, saldo acumulado, para onde foi o dinheiro e orçado x realizado.'),
+    ('Salvar em PDF', 'Na janela de impressão, escolha <b>Salvar como PDF</b> para enviar por WhatsApp ou e-mail.'),
+  ], None),
+  ('s8', 'bi-file-earmark-spreadsheet', 'Exportar para Excel ou Google Planilhas', 'Uma planilha completa do ano', [
+    ('Baixar', 'No menu, clique em <b>Exportar (Excel / Google)</b>, ou em Imprimir → <b>Baixar planilha</b>.'),
+    ('O que vem', 'Abas: Cadastro, Lançamentos (com filtro), um livro por aba com saldo, Dízimos e liquidação, Resumo mensal e Balanço. Os totais são fórmulas.'),
+    ('Google Planilhas', 'Abra <b>drive.google.com</b> → <b>Novo</b> → <b>Upload de arquivo</b> → escolha a planilha → clique nela → <b>Abrir com Google Planilhas</b>.'),
+  ], None),
+  ('s9', 'bi-question-circle', 'Perguntas frequentes', '', [
+    ('O botão Entrada me manda para o cadastro', 'Falta o cadastro: os nomes do pastor e do tesoureiro, ou os dízimos do ano anterior. Complete em <b>1º Cadastro da congregação</b>.'),
+    ('Errei a classificação', 'Antes da confirmação do pastor, é só recalcular. Depois, só a Tesouraria Nacional altera.'),
+    ('Lancei no mês errado', 'Se o mês ainda não foi fechado, edite o lançamento. Se já foi fechado, peça ao pastor para reabrir.'),
+    ('O sistema demorou para abrir', 'É normal no plano gratuito: depois de 15 minutos sem uso ele “dorme”. O primeiro acesso leva cerca de 1 minuto.'),
+  ], None),
+] %}
 <div class="d-flex align-items-center justify-content-between mb-4">
   <div>
-    <h1 class="page-title">Tutorial do Sistema</h1>
-    <p class="text-muted mb-0 small">Aprenda a usar o Tesouraria INJ passo a passo</p>
+    <h1 class="page-title">Tutorial</h1>
+    <p class="text-muted mb-0 small">A ordem do trabalho do tesoureiro, passo a passo</p>
   </div>
-  <button onclick="window.print()" class="btn btn-outline-secondary">
-    <i class="bi bi-printer me-2"></i>Imprimir
-  </button>
+  <button onclick="window.print()" class="btn btn-outline-secondary"><i class="bi bi-printer me-2"></i>Imprimir</button>
 </div>
 
-<!-- Índice -->
 <div class="form-card mb-4">
-  <div class="form-section-title"><i class="bi bi-list-ul me-2"></i>Índice</div>
-  <div class="row g-2">
-    {% set sections = [
-      ('1','bi-box-arrow-in-right','Primeiro Acesso e Login','#s1'),
-      ('2','bi-speedometer2','Dashboard — Visão Geral','#s2'),
-      ('3','bi-pencil-square','Como Registrar Lançamentos','#s3'),
-      ('4','bi-cash-coin','Como Calcular os Dízimos','#s4'),
-      ('5','bi-pie-chart','Como Usar o Orçamento','#s5'),
-      ('6','bi-bar-chart-line','Como Ver Relatórios','#s6'),
-      ('7','bi-gear','Configurações da Congregação','#s7'),
-      ('8','bi-shield-lock','Painel Admin (criar congregações)','#s8'),
-      ('9','bi-question-circle','Perguntas Frequentes','#s9'),
-    ] %}
-    {% for num, icon, title, link in sections %}
-    <div class="col-md-6 col-lg-4">
-      <a href="{{ link }}" class="text-decoration-none">
-        <div class="p-2 rounded-xl d-flex align-items-center gap-2"
-             style="background:#f8fafc; border:1px solid #eef0f4; transition:.2s"
-             onmouseover="this.style.background='#d6eaf8'" onmouseout="this.style.background='#f8fafc'">
-          <div style="width:28px;height:28px;background:#1a3a5c;border-radius:8px;
-                      display:flex;align-items:center;justify-content:center;flex-shrink:0">
-            <i class="bi {{ icon }} text-white" style="font-size:.75rem"></i>
-          </div>
-          <span class="small fw-semibold text-dark">{{ num }}. {{ title }}</span>
-        </div>
-      </a>
-    </div>
+  <div class="form-section-title"><i class="bi bi-signpost-split me-2"></i>A ordem do trabalho</div>
+  <div class="d-flex flex-wrap gap-2 align-items-center small fw-semibold">
+    {% for id, icon, titulo, sub, passos, aviso in secoes if id not in ('s0', 's9') %}
+    <a href="#{{ id }}" class="badge-livro text-decoration-none"><i class="bi {{ icon }} me-1"></i>{{ titulo }}</a>{% if not loop.last %}<i class="bi bi-arrow-right text-muted"></i>{% endif %}
     {% endfor %}
   </div>
 </div>
 
-<!-- ══════════════════════════════════════ -->
-<!-- SEÇÃO 1 — LOGIN -->
-<!-- ══════════════════════════════════════ -->
-<div class="form-card mb-4" id="s1">
-  <div class="tut-section-header">
-    <div class="tut-num">1</div>
-    <div>
-      <div class="tut-title"><i class="bi bi-box-arrow-in-right me-2"></i>Primeiro Acesso e Login</div>
-      <div class="tut-sub">Como entrar no sistema pela primeira vez</div>
-    </div>
+{% for id, icon, titulo, sub, passos, aviso in secoes %}
+<div class="form-card mb-4" id="{{ id }}">
+  <div class="tut-section-header mb-3">
+    <div class="tut-num"><i class="bi {{ icon }}"></i></div>
+    <div><div class="tut-title">{{ titulo }}</div>{% if sub %}<div class="tut-sub">{{ sub }}</div>{% endif %}</div>
   </div>
-
-  <div class="row g-3 mt-2">
-    <div class="col-md-6">
-      <div class="tut-step">
-        <div class="tut-step-num">1</div>
-        <div>
-          <div class="fw-semibold mb-1">Acesse o sistema</div>
-          <div class="small text-muted">Abra qualquer navegador (Chrome, Firefox, Safari) e acesse:</div>
-          <div class="tut-code mt-1">https://tesouraria-inj.onrender.com</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="tut-step">
-        <div class="tut-step-num">2</div>
-        <div>
-          <div class="fw-semibold mb-1">Digite usuário e senha</div>
-          <div class="small text-muted">Use as credenciais que o administrador enviou para você:</div>
-          <div class="mt-2 p-2 rounded" style="background:#f8fafc; border:1px solid #eef0f4; font-size:.82rem">
-            <div>👤 <strong>Usuário:</strong> ex: <code>inj-campinas</code></div>
-            <div>🔑 <strong>Senha:</strong> definida pelo admin</div>
-          </div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="tut-step">
-        <div class="tut-step-num">3</div>
-        <div>
-          <div class="fw-semibold mb-1">Clique em "Entrar"</div>
-          <div class="small text-muted">Você será direcionado ao Dashboard com os dados da sua congregação.</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="tut-step">
-        <div class="tut-step-num">4</div>
-        <div>
-          <div class="fw-semibold mb-1">Mude sua senha</div>
-          <div class="small text-muted">No menu lateral clique em <strong>Minha Conta</strong> e crie uma senha pessoal.</div>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="tut-alert info mt-3">
-    <i class="bi bi-info-circle me-2"></i>
-    Cada congregação tem seu próprio usuário e vê <strong>apenas seus próprios dados</strong>. Nenhuma congregação acessa os dados de outra.
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════ -->
-<!-- SEÇÃO 2 — DASHBOARD -->
-<!-- ══════════════════════════════════════ -->
-<div class="form-card mb-4" id="s2">
-  <div class="tut-section-header">
-    <div class="tut-num">2</div>
-    <div>
-      <div class="tut-title"><i class="bi bi-speedometer2 me-2"></i>Dashboard — Visão Geral</div>
-      <div class="tut-sub">A página inicial mostra um resumo completo das finanças</div>
-    </div>
-  </div>
-
-  <div class="row g-3 mt-2">
-    <div class="col-md-6">
-      <div class="p-3 rounded-xl" style="background:#d5f5e3; border-left:4px solid #27ae60">
-        <div class="fw-semibold"><i class="bi bi-arrow-down-circle me-1 text-success"></i>Total Entradas</div>
-        <div class="small text-muted mt-1">Soma de todos os valores recebidos no ano selecionado (ofertas, dízimos, votos, etc.)</div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="p-3 rounded-xl" style="background:#fadbd8; border-left:4px solid #e74c3c">
-        <div class="fw-semibold"><i class="bi bi-arrow-up-circle me-1 text-danger"></i>Total Saídas</div>
-        <div class="small text-muted mt-1">Soma de todos os gastos pagos no ano (aluguel, serviços, missões, etc.)</div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="p-3 rounded-xl" style="background:#d6eaf8; border-left:4px solid #2980b9">
-        <div class="fw-semibold"><i class="bi bi-wallet2 me-1 text-primary"></i>Saldo Atual</div>
-        <div class="small text-muted mt-1">Entradas − Saídas + Saldo do ano anterior. É quanto a congregação tem disponível.</div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="p-3 rounded-xl" style="background:#fdebd0; border-left:4px solid #f39c12">
-        <div class="fw-semibold"><i class="bi bi-graph-up me-1 text-warning"></i>Superávit / Déficit</div>
-        <div class="small text-muted mt-1">Se positivo (verde) = entrou mais do que saiu. Se negativo (vermelho) = gastou mais do que recebeu.</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="mt-3 p-3 rounded-xl" style="background:#f8fafc; border:1px solid #eef0f4">
-    <div class="fw-semibold small mb-2"><i class="bi bi-bar-chart me-1"></i>Gráficos</div>
-    <div class="row g-2">
-      <div class="col-md-6">
-        <div class="small text-muted"><strong>Fluxo Mensal:</strong> Barras verdes = entradas, barras vermelhas = saídas, mês a mês.</div>
-      </div>
-      <div class="col-md-6">
-        <div class="small text-muted"><strong>Top Saídas:</strong> Pizza mostrando as categorias onde mais se gastou no ano.</div>
-      </div>
-    </div>
-  </div>
-
-  <div class="tut-alert success mt-3">
-    <i class="bi bi-lightbulb me-2"></i>
-    Para ver outro ano, use o seletor <strong>"Ano"</strong> no canto superior direito da página.
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════ -->
-<!-- SEÇÃO 3 — LANÇAMENTOS -->
-<!-- ══════════════════════════════════════ -->
-<div class="form-card mb-4" id="s3">
-  <div class="tut-section-header">
-    <div class="tut-num">3</div>
-    <div>
-      <div class="tut-title"><i class="bi bi-pencil-square me-2"></i>Como Registrar Lançamentos</div>
-      <div class="tut-sub">Registre toda entrada e saída de dinheiro da congregação</div>
-    </div>
-  </div>
-
-  <div class="tut-alert warning mt-2 mb-3">
-    <i class="bi bi-exclamation-triangle me-2"></i>
-    <strong>Importante:</strong> Cada movimentação financeira deve ser registrada aqui. Sem lançamento, não aparece nos relatórios.
-  </div>
-
-  <div class="fw-semibold mb-3">Como registrar um lançamento:</div>
-  <div class="row g-3">
-    <div class="col-md-4">
-      <div class="tut-step">
-        <div class="tut-step-num">1</div>
-        <div>
-          <div class="fw-semibold mb-1">Escolha o Livro</div>
-          <div class="small text-muted">Selecione o livro contábil:</div>
-          <ul class="small text-muted mt-1 ps-3">
-            <li><strong>Fundo Local</strong> — ofertas e gastos da igreja local</li>
-            <li><strong>Projetos</strong> — vendas, brechós, eventos</li>
-            <li><strong>Envios/Missões</strong> — ofertas missionárias</li>
-            <li><strong>Liq. Dízimos</strong> — registro de dízimos</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="tut-step">
-        <div class="tut-step-num">2</div>
-        <div>
-          <div class="fw-semibold mb-1">Escolha o Tipo</div>
-          <div class="small text-muted">
-            <span class="badge badge-entrada rounded-pill">Entrada</span> = dinheiro que entrou<br>
-            <span class="badge badge-saida rounded-pill mt-1">Saída</span> = dinheiro que saiu
-          </div>
-          <div class="small text-muted mt-2">Após escolher Livro e Tipo, a lista de itens aparece automaticamente.</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-4">
-      <div class="tut-step">
-        <div class="tut-step-num">3</div>
-        <div>
-          <div class="fw-semibold mb-1">Preencha os dados</div>
-          <ul class="small text-muted ps-3">
-            <li><strong>Item:</strong> categoria específica</li>
-            <li><strong>Valor:</strong> ex: 150,00</li>
-            <li><strong>Mês e Ano</strong> de referência</li>
-            <li><strong>Data:</strong> quando aconteceu</li>
-            <li><strong>Obs:</strong> opcional</li>
-          </ul>
-        </div>
-      </div>
-    </div>
-  </div>
-
-  <div class="mt-3 p-3 rounded-xl" style="background:#f8fafc; border:1px solid #eef0f4">
-    <div class="fw-semibold small mb-2"><i class="bi bi-table me-1"></i>Tabela de Lançamentos</div>
-    <div class="small text-muted">
-      Na mesma página, abaixo do formulário, aparecem todos os lançamentos. Você pode:
-      <span class="badge bg-secondary ms-1">Filtrar por mês/ano</span>
-      <span class="badge bg-secondary ms-1">✏️ Editar</span>
-      <span class="badge bg-secondary ms-1">🗑️ Excluir</span>
-      <span class="badge bg-success ms-1">Exportar Excel</span>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════ -->
-<!-- SEÇÃO 4 — DÍZIMOS -->
-<!-- ══════════════════════════════════════ -->
-<div class="form-card mb-4" id="s4">
-  <div class="tut-section-header">
-    <div class="tut-num">4</div>
-    <div>
-      <div class="tut-title"><i class="bi bi-cash-coin me-2"></i>Dízimos e fechamento do mês</div>
-      <div class="tut-sub">Registre os dízimos; o sistema divide conforme a carta anual e fecha o mês</div>
-    </div>
-  </div>
-
-  <div class="row g-3 mt-2">
-    <div class="col-md-6">
-      <div class="fw-semibold mb-2">Passo a passo:</div>
-      <div class="tut-step">
-        <div class="tut-step-num">1</div>
-        <div>
-          <div class="fw-semibold mb-1">Registre o dízimo bruto</div>
-          <div class="small text-muted">Em Dízimos, registre o valor recebido (pode ser culto por culto). O fechamento soma o mês inteiro.</div>
-        </div>
-      </div>
-      <div class="tut-step mt-2">
-        <div class="tut-step-num">2</div>
-        <div>
-          <div class="fw-semibold mb-1">Os percentuais vêm da carta anual</div>
-          <div class="small text-muted">A Tesouraria Nacional emite a carta do ano e o pastor confirma. Dela saem: Dízimo dos Dízimos 10%, nivelação 5% (se houver), Betel 4% (plenamente formada) e o % do fundo local. Ninguém digita percentual.</div>
-        </div>
-      </div>
-      <div class="tut-step mt-2">
-        <div class="tut-step-num">3</div>
-        <div>
-          <div class="fw-semibold mb-1">Lance as ofertas de envio</div>
-          <div class="small text-muted">Em Lançamentos, livro “Envios / Missões”, tipo Entrada: Dia Missionário, Raios de Luz, Safras, ofertas distritais e as demais.</div>
-        </div>
-      </div>
-      <div class="tut-step mt-2">
-        <div class="tut-step-num">4</div>
-        <div>
-          <div class="fw-semibold mb-1">Feche o mês</div>
-          <div class="small text-muted">Em “Fechar o mês”: o tesoureiro fecha, o pastor aprova, o tesoureiro deposita até o dia 5 e anexa o comprovante. Se o valor conferir, o mês trava.</div>
-        </div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="fw-semibold mb-2">Exemplo de cálculo:</div>
-      <div class="dizimo-result">
-        <div class="mb-3">
-          <div class="dr-label">Dízimo Bruto</div>
-          <div class="dr-value">R$ 2.000,00</div>
-        </div>
-        <div class="row">
-          <div class="col-6">
-            <div class="dr-label">Dízimo dos Dízimos (10%) + Betel (4% de R$ 1.800)</div>
-            <div class="dr-value text-warning">R$ 272,00</div>
-          </div>
-          <div class="col-6">
-            <div class="dr-label">Fundo local (1%)</div>
-            <div class="dr-value" style="color:#82e0aa">R$ 20,00</div>
-          </div>
-        </div>
-        <hr style="border-color:rgba(255,255,255,.2)"/>
-        <div>
-          <div class="dr-label">Sustento pastoral</div>
-          <div class="dr-value" style="font-size:1.6rem">R$ 1.708,00</div>
-        </div>
-      </div>
-      <div class="tut-alert info mt-3">
-        <i class="bi bi-printer me-2"></i>
-        Exemplo de uma congregação plenamente formada, sem nivelação e com 1% de fundo local. Depois de fechado e aprovado, o sistema gera o <strong>Relatório Econômico</strong> pronto para imprimir.
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════ -->
-<!-- SEÇÃO 5 — ORÇAMENTO -->
-<!-- ══════════════════════════════════════ -->
-<div class="form-card mb-4" id="s5">
-  <div class="tut-section-header">
-    <div class="tut-num">5</div>
-    <div>
-      <div class="tut-title"><i class="bi bi-pie-chart me-2"></i>Como Usar o Orçamento</div>
-      <div class="tut-sub">Planeje quanto vai entrar e sair e compare com o realizado</div>
-    </div>
-  </div>
-
-  <div class="row g-4 mt-1">
-    <div class="col-md-6">
-      <div class="fw-semibold mb-2"><i class="bi bi-pencil me-1"></i>Aba "Definir Orçamento"</div>
-      <div class="tut-step">
-        <div class="tut-step-num">1</div>
-        <div class="small text-muted">Clique na aba <strong>"Definir Orçamento"</strong></div>
-      </div>
-      <div class="tut-step mt-2">
-        <div class="tut-step-num">2</div>
-        <div class="small text-muted">Para cada categoria, preencha o valor que planeja <strong>receber</strong> ou <strong>gastar</strong> no ano.</div>
-      </div>
-      <div class="tut-step mt-2">
-        <div class="tut-step-num">3</div>
-        <div class="small text-muted">Clique <strong>"Salvar Orçamento"</strong>.</div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="fw-semibold mb-2"><i class="bi bi-bar-chart me-1"></i>Aba "Comparativo"</div>
-      <div class="small text-muted mb-2">Mostra o <strong>planejado vs realizado</strong> com barras de progresso:</div>
-      <div class="mb-2">
-        <div class="d-flex justify-content-between small mb-1">
-          <span>Ofertas de Domingo</span>
-          <span>R$ 800 / R$ 1.200</span>
-        </div>
-        <div class="progress">
-          <div class="progress-bar bg-success" style="width:67%"></div>
-        </div>
-        <div class="small text-muted">67% do orçado ← dentro do esperado ✅</div>
-      </div>
-      <div class="mb-2">
-        <div class="d-flex justify-content-between small mb-1">
-          <span>Serviços Públicos</span>
-          <span>R$ 650 / R$ 500</span>
-        </div>
-        <div class="progress">
-          <div class="progress-bar over" style="width:100%"></div>
-        </div>
-        <div class="small text-danger">130% — ultrapassou o orçamento! ⚠️</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════ -->
-<!-- SEÇÃO 6 — RELATÓRIOS -->
-<!-- ══════════════════════════════════════ -->
-<div class="form-card mb-4" id="s6">
-  <div class="tut-section-header">
-    <div class="tut-num">6</div>
-    <div>
-      <div class="tut-title"><i class="bi bi-bar-chart-line me-2"></i>Como Ver Relatórios</div>
-      <div class="tut-sub">Filtre, analise e exporte os dados financeiros</div>
-    </div>
-  </div>
-
-  <div class="row g-3 mt-1">
-    <div class="col-md-6">
-      <div class="fw-semibold mb-2">Filtros disponíveis:</div>
-      <table class="table table-sm">
-        <tr><td class="small fw-semibold">Ano</td><td class="small text-muted">Seleciona o ano</td></tr>
-        <tr><td class="small fw-semibold">Mês</td><td class="small text-muted">Filtra um mês específico</td></tr>
-        <tr><td class="small fw-semibold">Livro</td><td class="small text-muted">Fundo Local, Projetos, etc.</td></tr>
-        <tr><td class="small fw-semibold">Tipo</td><td class="small text-muted">Apenas entradas ou saídas</td></tr>
-        <tr><td class="small fw-semibold">Buscar item</td><td class="small text-muted">Pesquisa por categoria</td></tr>
-      </table>
-    </div>
-    <div class="col-md-6">
-      <div class="fw-semibold mb-2">O que o relatório mostra:</div>
-      <ul class="small text-muted ps-3">
-        <li>Total de entradas e saídas do período</li>
-        <li>Superávit (sobra) ou déficit (falta)</li>
-        <li>Resumo mês a mês</li>
-        <li>Resumo por livro contábil</li>
-        <li>Lista detalhada de todos os lançamentos</li>
-      </ul>
-      <div class="mt-3">
-        <div class="fw-semibold mb-1">Exportar para Excel:</div>
-        <div class="small text-muted">Clique no botão <span class="badge bg-success">Exportar Excel</span> para baixar um arquivo .xlsx com o extrato completo e resumo mensal.</div>
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════ -->
-<!-- SEÇÃO 7 — CONFIGURAÇÕES -->
-<!-- ══════════════════════════════════════ -->
-<div class="form-card mb-4" id="s7">
-  <div class="tut-section-header">
-    <div class="tut-num">7</div>
-    <div>
-      <div class="tut-title"><i class="bi bi-gear me-2"></i>Configurações da Congregação</div>
-      <div class="tut-sub">Configure os dados da sua congregação</div>
-    </div>
-  </div>
-
-  <div class="row g-3 mt-1">
-    <div class="col-md-6">
-      <div class="fw-semibold mb-2">O que configurar:</div>
-      <table class="table table-sm">
-        <tr>
-          <td class="small fw-semibold" style="width:40%">Nome da Congregação</td>
-          <td class="small text-muted">Aparece em todos os relatórios</td>
-        </tr>
-        <tr>
-          <td class="small fw-semibold">Nome do Pastor</td>
-          <td class="small text-muted">Para identificação nos documentos</td>
-        </tr>
-        <tr>
-          <td class="small fw-semibold">Nome do Tesoureiro</td>
-          <td class="small text-muted">Aparece na topbar do sistema</td>
-        </tr>
-        <tr>
-          <td class="small fw-semibold">Auxiliar de Tesouraria</td>
-          <td class="small text-muted">Opcional</td>
-        </tr>
-        <tr>
-          <td class="small fw-semibold">Ano Atual</td>
-          <td class="small text-muted">Ano padrão nas telas</td>
-        </tr>
-        <tr>
-          <td class="small fw-semibold">Saldo Ano Anterior</td>
-          <td class="small text-muted">Saldo que veio do ano passado</td>
-        </tr>
-        <tr>
-          <td class="small fw-semibold">Endereço da igreja</td>
-          <td class="small text-muted">Aparece no Relatório Econômico</td>
-        </tr>
-      </table>
-    </div>
-    <div class="col-md-6">
-      <div class="tut-alert warning">
-        <i class="bi bi-exclamation-triangle me-2"></i>
-        <strong>Faça isso primeiro!</strong> Antes de começar a usar o sistema, preencha as configurações da sua congregação. O nome aparecerá em todos os relatórios e exportações.
-      </div>
-      <div class="tut-alert info mt-3">
-        <i class="bi bi-info-circle me-2"></i>
-        Os percentuais de envio não ficam nas configurações: vêm da carta anual (menu “Carta anual”).
-      </div>
-    </div>
-  </div>
-</div>
-
-<!-- ══════════════════════════════════════ -->
-<!-- SEÇÃO 8 — ADMIN -->
-<!-- ══════════════════════════════════════ -->
-{% if session.get('is_admin') %}
-<div class="form-card mb-4" id="s8">
-  <div class="tut-section-header">
-    <div class="tut-num">8</div>
-    <div>
-      <div class="tut-title"><i class="bi bi-shield-lock me-2"></i>Painel Admin — Gerenciar Congregações</div>
-      <div class="tut-sub">Como criar e gerenciar as contas das congregações</div>
-    </div>
-  </div>
-
-  <div class="row g-3 mt-1">
-    <div class="col-md-6">
-      <div class="fw-semibold mb-2">Criar nova congregação:</div>
-      <div class="tut-step">
-        <div class="tut-step-num">1</div>
-        <div class="small text-muted">Vá em <strong>Administrador</strong> no menu lateral</div>
-      </div>
-      <div class="tut-step mt-2">
-        <div class="tut-step-num">2</div>
-        <div class="small text-muted">Clique em <strong>"Nova Congregação"</strong></div>
-      </div>
-      <div class="tut-step mt-2">
-        <div class="tut-step-num">3</div>
-        <div>
-          <div class="small text-muted">Preencha:</div>
-          <ul class="small text-muted ps-3 mt-1">
-            <li><strong>Nome:</strong> ex: INJ São Paulo</li>
-            <li><strong>Usuário:</strong> ex: inj-saopaulo</li>
-            <li><strong>Senha:</strong> mínimo 6 caracteres</li>
-          </ul>
-        </div>
-      </div>
-      <div class="tut-step mt-2">
-        <div class="tut-step-num">4</div>
-        <div class="small text-muted">Envie o <strong>link + usuário + senha</strong> para o tesoureiro da congregação pelo WhatsApp ou email.</div>
-      </div>
-    </div>
-    <div class="col-md-6">
-      <div class="fw-semibold mb-2">Mensagem sugerida para enviar:</div>
-      <div class="p-3 rounded-xl" style="background:#f8fafc; border:1px dashed #aab; font-size:.82rem; font-family:monospace; line-height:1.8">
-        🏛️ Sistema de Tesouraria INJ<br><br>
-        🔗 Link: https://tesouraria-inj.onrender.com<br>
-        👤 Usuário: [usuário que você criou]<br>
-        🔑 Senha: [senha que você definiu]<br><br>
-        Acesse de qualquer navegador!<br>
-        Celular, tablet ou computador.
-      </div>
-      <div class="tut-alert warning mt-3">
-        <i class="bi bi-key me-2"></i>
-        Peça para o tesoureiro <strong>alterar a senha</strong> após o primeiro acesso em <em>Minha Conta</em>.
-      </div>
-    </div>
-  </div>
-</div>
-{% endif %}
-
-<!-- ══════════════════════════════════════ -->
-<!-- SEÇÃO 9 — FAQ -->
-<!-- ══════════════════════════════════════ -->
-<div class="form-card mb-4" id="s9">
-  <div class="tut-section-header">
-    <div class="tut-num">9</div>
-    <div>
-      <div class="tut-title"><i class="bi bi-question-circle me-2"></i>Perguntas Frequentes</div>
-      <div class="tut-sub">Dúvidas comuns sobre o uso do sistema</div>
-    </div>
-  </div>
-
-  <div class="accordion mt-3" id="faqAccordion">
-    {% set faqs = [
-      ('O sistema demora para carregar na primeira vez.', 'No plano gratuito, o servidor "dorme" após 15 minutos sem acesso. Na próxima visita ele acorda e leva cerca de 30 segundos. Depois disso funciona normalmente. Basta aguardar.'),
-      ('Posso usar no celular?', 'Sim! O sistema é responsivo e funciona em qualquer navegador de celular, tablet ou computador. Acesse o link e entre com seu usuário e senha normalmente.'),
-      ('Esqueci minha senha. O que faço?', 'Entre em contato com o administrador do sistema. Ele pode redefinir sua senha pelo painel de Administrador → selecionar sua congregação → ícone de chave 🔑.'),
-      ('Posso registrar lançamentos de anos anteriores?', 'Sim! Ao registrar um lançamento, escolha o ano correto no campo "Ano". Para visualizar, use o filtro de ano no topo das páginas.'),
-      ('O que é o Saldo Ano Anterior?', 'É o dinheiro que sobrou do ano passado e que carrega para o novo ano. Configure em Configurações → "Saldo Ano Anterior". Esse valor é somado ao saldo atual do dashboard.'),
-      ('Como exportar os dados para Excel?', 'Vá em Relatórios → clique no botão verde "Exportar Excel" no canto superior direito. Será baixado um arquivo .xlsx com o extrato completo e resumo mensal.'),
-      ('Os dados de uma congregação aparecem para outra?', 'Não. Cada congregação tem seus dados 100% separados. Uma congregação nunca vê os dados de outra.'),
-      ('Como alterar as porcentagens dos dízimos?', 'Os percentuais vêm da carta anual emitida pela Tesouraria Nacional e confirmada pelo pastor. Se algo estiver errado, fale com a Tesouraria Nacional.'),
-      ('Errei um lançamento de um mês já fechado. E agora?', 'Peça ao pastor para reabrir o mês em “Fechar o mês”, informando o motivo. Corrija, feche de novo e refaça a aprovação. Depois que a nacional confirma o recebimento, só a Tesouraria Nacional pode ajudar.'),
-    ] %}
-    {% for i, (pergunta, resposta) in enumerate(faqs) %}
-    <div class="accordion-item border-0 mb-2">
-      <h2 class="accordion-header">
-        <button class="accordion-button collapsed fw-semibold small" type="button"
-                data-bs-toggle="collapse" data-bs-target="#faq{{ i }}"
-                style="background:#f8fafc; border-radius:10px; border:1px solid #eef0f4">
-          <i class="bi bi-question-circle me-2 text-primary"></i>{{ pergunta }}
-        </button>
-      </h2>
-      <div id="faq{{ i }}" class="accordion-collapse collapse" data-bs-parent="#faqAccordion">
-        <div class="accordion-body small text-muted pt-2 pb-3 px-4">
-          <i class="bi bi-check-circle text-success me-2"></i>{{ resposta }}
-        </div>
-      </div>
-    </div>
+  <div class="d-flex flex-column gap-2">
+    {% for t, d in passos %}
+    <div class="tut-step"><div class="tut-step-num">{{ loop.index }}</div><div><div class="fw-semibold small">{{ t }}</div><div class="small text-muted">{{ d | safe }}</div></div></div>
     {% endfor %}
   </div>
+  {% if aviso %}<div class="tut-alert {{ aviso[0] }} mt-3">{{ aviso[1] }}</div>{% endif %}
 </div>
-
-<!-- Rodapé do tutorial -->
-<div class="text-center py-4">
-  <div class="text-muted small">
-    <i class="bi bi-bank2 me-1"></i>
-    <strong>Tesouraria INJ</strong> — Sistema de Gestão Financeira para Congregações Locais
-  </div>
-  <div class="text-muted small mt-1">Em caso de dúvidas, entre em contato com o administrador do sistema.</div>
-</div>
-
+{% endfor %}
 {% endblock %}
 
 {% block head %}
 <style>
-  .tut-section-header { display:flex; align-items:flex-start; gap:16px; margin-bottom:4px; }
-  .tut-num { width:44px; height:44px; background:#1a3a5c; color:#fff; border-radius:12px;
-              display:flex; align-items:center; justify-content:center;
-              font-size:1.2rem; font-weight:700; flex-shrink:0; }
+  .tut-section-header { display:flex; align-items:flex-start; gap:16px; }
+  .tut-num { width:44px; height:44px; background:#1a3a5c; color:#fff; border-radius:12px; display:flex; align-items:center;
+             justify-content:center; font-size:1.2rem; flex-shrink:0; }
   .tut-title { font-size:1.1rem; font-weight:700; color:#1a3a5c; }
-  .tut-sub   { font-size:.82rem; color:#7f8c9a; margin-top:2px; }
-
-  .tut-step { display:flex; align-items:flex-start; gap:12px; padding:12px;
-              background:#f8fafc; border-radius:10px; border:1px solid #eef0f4; }
-  .tut-step-num { width:26px; height:26px; background:#2980b9; color:#fff; border-radius:50%;
-                  display:flex; align-items:center; justify-content:center;
-                  font-size:.78rem; font-weight:700; flex-shrink:0; }
-
-  .tut-code { background:#1a3a5c; color:#7fc7ff; padding:6px 12px; border-radius:8px;
-              font-family:monospace; font-size:.82rem; }
-
+  .tut-sub { font-size:.82rem; color:#7f8c9a; margin-top:2px; }
+  .tut-step { display:flex; align-items:flex-start; gap:12px; padding:12px; background:#f8fafc; border-radius:10px; border:1px solid #eef0f4; }
+  .tut-step-num { width:26px; height:26px; background:#2980b9; color:#fff; border-radius:50%; display:flex; align-items:center;
+                  justify-content:center; font-size:.78rem; font-weight:700; flex-shrink:0; }
   .tut-alert { padding:10px 14px; border-radius:10px; font-size:.83rem; }
-  .tut-alert.info    { background:#d6eaf8; border-left:4px solid #2980b9; color:#1a3a5c; }
-  .tut-alert.success { background:#d5f5e3; border-left:4px solid #27ae60; color:#1e5631; }
+  .tut-alert.info { background:#d6eaf8; border-left:4px solid #2980b9; color:#1a3a5c; }
   .tut-alert.warning { background:#fdebd0; border-left:4px solid #f39c12; color:#784212; }
-
-  @media print {
-    .sidebar, .topbar, button { display:none !important; }
-    .main-content { margin-left:0 !important; }
-    .page-content { padding:10px !important; }
-    .form-card { break-inside:avoid; box-shadow:none; border:1px solid #ddd; }
-  }
+  @media print { .form-card { break-inside:avoid; box-shadow:none; border:1px solid #ddd; } }
 </style>
 {% endblock %}

@@ -5,8 +5,8 @@
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4">
   <div>
-    <h1 class="page-title">Lançamentos</h1>
-    <p class="text-muted mb-0 small">Registre e gerencie entradas e saídas</p>
+    <h1 class="page-title">{% if livro_sel == 'FundoLocal' %}Livro: Caixa local{% elif livro_sel %}Livro: {{ livros_labels[livro_sel] }}{% else %}Todos os lançamentos{% endif %}</h1>
+    <p class="text-muted mb-0 small">{% if pode_editar %}Para registrar, use <a href="{{ url_for('lancar', tipo='Entrada') }}">Registrar entrada</a> ou <a href="{{ url_for('lancar', tipo='Saída') }}">Registrar saída</a>.{% endif %}</p>
   </div>
 </div>
 
@@ -117,6 +117,7 @@
     <!-- Filtros -->
     <div class="filter-bar mb-3">
       <form method="GET" class="row g-2 align-items-end">
+        <input type="hidden" name="livro" value="{{ livro_sel }}"/>
         <div class="col-sm-4">
           <label class="form-label mb-1">Mês</label>
           <select name="mes" class="form-select form-select-sm">
@@ -212,6 +213,8 @@
                 {{ t['obs'] or '' }}
               </td>
               <td>
+                <div class="d-flex gap-1 align-items-center">
+                {% if not t['origem'] %}<a href="{{ url_for('recibo', tipo='lancamento', rid=t['id']) }}" target="_blank" class="btn btn-xs btn-outline-success" style="padding:2px 8px; font-size:0.75rem" title="Recibo"><i class="bi bi-receipt"></i></a>{% endif %}
                 {% if pode_editar and not t['origem'] and t['mes'] not in travados %}
                 <div class="d-flex gap-1">
                   {% if not t['n_anexos'] %}
@@ -233,6 +236,7 @@
                   </form>
                 </div>
                 {% elif t['mes'] in travados %}<i class="bi bi-lock text-muted" title="Mês fechado"></i>{% endif %}
+                </div>
               </td>
             </tr>
             {% else %}

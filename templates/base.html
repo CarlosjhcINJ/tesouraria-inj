@@ -29,16 +29,35 @@
 
   <nav class="sidebar-nav">
     {% set ep = request.endpoint %}
+    {% if session.get('papel') in ('admin','supervisor') and lista_congregacoes %}
+    <div class="px-3 pt-3">
+      <select class="form-select form-select-sm" onchange="if(this.value) location.href=this.value">
+        <option value="{{ url_for('ver_nacional') }}" {% if not session.get('cong_id') %}selected{% endif %}>Tesouraria Nacional</option>
+        {% for c in lista_congregacoes %}<option value="{{ url_for('ver_congregacao', cid=c['id']) }}" {% if session.get('cong_id') == c['id'] %}selected{% endif %}>{{ c['nome'] }}</option>{% endfor %}
+      </select>
+    </div>
+    {% endif %}
     {% if session.get('cong_id') %}
     <div class="nav-section">TESOURARIA LOCAL</div>
-    <a href="{{ url_for('dashboard') }}" class="nav-item {% if ep == 'dashboard' %}active{% endif %}"><i class="bi bi-speedometer2"></i> Painel</a>
-    <a href="{{ url_for('lancamentos') }}" class="nav-item {% if ep in ('lancamentos','editar_lancamento') %}active{% endif %}"><i class="bi bi-pencil-square"></i> Lançamentos</a>
-    <a href="{{ url_for('dizimos') }}" class="nav-item {% if ep == 'dizimos' %}active{% endif %}"><i class="bi bi-cash-coin"></i> Dízimos</a>
-    <a href="{{ url_for('fechamento') }}" class="nav-item {% if ep == 'fechamento' %}active{% endif %}"><i class="bi bi-lock"></i> Fechar o mês</a>
-    <a href="{{ url_for('carta') }}" class="nav-item {% if ep == 'carta' %}active{% endif %}"><i class="bi bi-envelope-paper"></i> Carta anual</a>
-    <div class="nav-section mt-2">ANÁLISE</div>
+    <a href="{{ url_for('dashboard') }}" class="nav-item {% if ep == 'dashboard' %}active{% endif %}"><i class="bi bi-house"></i> Início</a>
+    <a href="{{ url_for('configuracoes') }}" class="nav-item {% if ep == 'configuracoes' %}active{% endif %}"><i class="bi bi-person-vcard"></i> 1º Cadastro da congregação</a>
     <a href="{{ url_for('orcamento') }}" class="nav-item {% if ep == 'orcamento' %}active{% endif %}"><i class="bi bi-pie-chart"></i> Orçamento</a>
+    <a href="{{ url_for('lancar', tipo='Entrada') }}" class="nav-item {% if ep == 'lancar' and request.args.get('tipo') == 'Entrada' %}active{% endif %}"><i class="bi bi-arrow-down-circle"></i> Registrar entrada</a>
+    <a href="{{ url_for('lancar', tipo='Saída') }}" class="nav-item {% if ep == 'lancar' and request.args.get('tipo') == 'Saída' %}active{% endif %}"><i class="bi bi-arrow-up-circle"></i> Registrar saída</a>
+    <a href="{{ url_for('dizimos') }}" class="nav-item {% if ep == 'dizimos' %}active{% endif %}"><i class="bi bi-cash-coin"></i> Dízimos</a>
+    <div class="nav-section mt-2">LIVROS</div>
+    <a href="{{ url_for('lancamentos', livro='FundoLocal') }}" class="nav-item {% if ep == 'lancamentos' and request.args.get('livro') == 'FundoLocal' %}active{% endif %}"><i class="bi bi-wallet2"></i> Caixa local</a>
+    <a href="{{ url_for('lancamentos', livro='Projetos') }}" class="nav-item {% if ep == 'lancamentos' and request.args.get('livro') == 'Projetos' %}active{% endif %}"><i class="bi bi-hammer"></i> Projetos</a>
+    <a href="{{ url_for('lancamentos', livro='Envios') }}" class="nav-item {% if ep == 'lancamentos' and request.args.get('livro') == 'Envios' %}active{% endif %}"><i class="bi bi-send"></i> Envios</a>
+    <a href="{{ url_for('lancamentos') }}" class="nav-item {% if ep in ('lancamentos','editar_lancamento') and not request.args.get('livro') %}active{% endif %}"><i class="bi bi-list-ul"></i> Todos os lançamentos</a>
+    <div class="nav-section mt-2">FIM DO MÊS</div>
+    <a href="{{ url_for('fechamento') }}" class="nav-item {% if ep == 'fechamento' %}active{% endif %}"><i class="bi bi-lock"></i> Fechar o mês</a>
+    <a href="{{ url_for('imprimir') }}" class="nav-item {% if ep == 'imprimir' %}active{% endif %}"><i class="bi bi-printer"></i> Imprimir (livros, recibos, envios)</a>
+    <a href="{{ url_for('exportar_excel') }}" class="nav-item"><i class="bi bi-file-earmark-spreadsheet"></i> Exportar (Excel / Google)</a>
+    <a href="{{ url_for('balanco') }}" class="nav-item {% if ep == 'balanco' %}active{% endif %}"><i class="bi bi-clipboard-data"></i> Balanço e gráficos</a>
     <a href="{{ url_for('relatorio') }}" class="nav-item {% if ep == 'relatorio' %}active{% endif %}"><i class="bi bi-bar-chart-line"></i> Relatórios</a>
+    <a href="{{ url_for('visao_geral') }}" class="nav-item {% if ep == 'visao_geral' %}active{% endif %}"><i class="bi bi-graph-up"></i> Gráficos do ano</a>
+    <a href="{{ url_for('carta') }}" class="nav-item {% if ep == 'carta' %}active{% endif %}"><i class="bi bi-envelope-paper"></i> Carta anual</a>
     {% endif %}
     {% if session.get('papel') in ('admin','supervisor') %}
     <div class="nav-section">TESOURARIA NACIONAL</div>
@@ -51,9 +70,6 @@
     {% endif %}
     {% endif %}
     <div class="nav-section mt-2">SISTEMA</div>
-    {% if session.get('cong_id') %}
-    <a href="{{ url_for('configuracoes') }}" class="nav-item {% if ep == 'configuracoes' %}active{% endif %}"><i class="bi bi-gear"></i> Configurações</a>
-    {% endif %}
     <a href="{{ url_for('minha_conta') }}" class="nav-item {% if ep == 'minha_conta' %}active{% endif %}"><i class="bi bi-person-gear"></i> Minha conta</a>
     <a href="{{ url_for('tutorial') }}" class="nav-item {% if ep == 'tutorial' %}active{% endif %}"><i class="bi bi-book"></i> Tutorial</a>
   </nav>

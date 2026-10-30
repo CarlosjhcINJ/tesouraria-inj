@@ -4,6 +4,7 @@ Rodar: python -m pytest -q
 Com Postgres: DATABASE_URL=postgresql://... python -m pytest -q
 """
 import io
+from datetime import date
 import os
 import re
 import sys
@@ -182,7 +183,8 @@ def test_fluxo_completo(app):
     # todas as páginas abrem para cada perfil
     for cli, paginas in [
         (tes, ['/', '/lancamentos', '/dizimos', '/fechamento', '/carta?ano=2026', '/orcamento', '/relatorio',
-               '/configuracoes', '/minha-conta', '/tutorial', '/exportar/excel?ano=2026']),
+               '/configuracoes', '/minha-conta', '/tutorial', '/exportar/excel?ano=2026', '/lancar', '/lancar?tipo=Entrada',
+               '/lancar?tipo=Saída', '/visao-geral', '/lancamentos?livro=Projetos', '/livro-do-mes?ano=2026&mes=9']),
         (pas, ['/', '/lancamentos', '/dizimos', '/fechamento?ano=2026&mes=9', '/carta?ano=2026']),
         (adm, ['/nacional/envios', '/nacional/cartas?ano=2027', '/nacional/regras', '/admin', '/nacional/auditoria',
                f'/nacional/carta/{cid}/2026']),
@@ -229,3 +231,116 @@ def test_foto_de_comprovante_e_reduzida(app):
     assert a['tipo'] == 'image/jpeg' and a['nome'] == 'foto.jpg'
     assert len(a['dados']) < 300 * 1024
     assert Image.open(io.BytesIO(a['dados'])).size[0] <= 1600
+
+
+def test_inicio_guiado_e_livro_do_mes(app):
+    tes = entrar(app, 'vr.tesouraria', 'tesoureiro123')
+    inicio = tes.get('/?ano=2026&mes=9').get_data(as_text=True)
+    assert 'Os lançamentos começam aqui' in inicio and '>ENTRADA<' in inicio and '>SAÍDA<' in inicio and 'Orçamento do ano' in inicio
+    r = tes.post('/lancamentos', data={'livro': 'Projetos', 'tipo': 'Entrada', 'item': 'Brechó', 'valor': '85,50',
+                                       'mes': 'novembro', 'ano': 2026, 'data_registro': '02/11/2026', 'voltar': 'lancar'})
+    assert '/lancar' in r.headers['Location']
+    livro = tes.get('/livro-do-mes?ano=2026&mes=9').get_data(as_text=True)
+    assert 'LIVRO CAIXA DO MÊS' in livro and 'Serviços Públicos' in livro and 'Saldo anterior' in livro
+    assert 'Brechó' in tes.get('/livro-do-mes?ano=2026&mes=11').get_data(as_text=True)
+
+
+def test_admin_abre_congregacao(app):
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    adm = entrar(app, 'nacional', 'senha-forte-123')
+    with appmod.get_db() as conn:
+        cid = conn.execute("SELECT id FROM congregacoes WHERE nome='Vila Ramos/SP'").fetchone()['id']
+    assert adm.get(f'/ver/{cid}').status_code == 302
+    pagina = adm.get('/').get_data(as_text=True)
+    assert 'Vila Ramos/SP' in pagina and '>ENTRADA<' in pagina
+    assert adm.get('/lancar?tipo=Saída').status_code == 200
+    adm.get('/ver/nacional')
+    assert adm.get('/').status_code == 302
+
+
+def test_recibo_configuracao_balanco_e_impressao(app):
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    tes = entrar(app, 'vr.tesouraria', 'tesoureiro123')
+    # nomes dos responsáveis
+    r = tes.post('/configuracoes', data={'acao': 'dados', 'nome_congregacao': 'Vila Ramos/SP', 'nome_pastor': 'Pr. Fulano de Tal',
+                                         'nome_tesoureiro': 'Irmã Beltrana', 'ano_atual': 2026, 'saldo_ano_anterior': '1.000,00'})
+    assert r.status_code == 302
+    cfg = tes.get('/configuracoes?ano=2026').get_data(as_text=True)
+    assert 'Pr. Fulano de Tal' in cfg and 'Confirmada pelo pastor' in cfg  # carta 2026 já confirmada: travada p/ tesoureiro
+    assert 'porcentagens' in tes.post('/configuracoes', data={'acao': 'porcentagens', 'ano': 2026, 'categoria': 'nova'},
+                                      follow_redirects=True).get_data(as_text=True).lower()
+    with appmod.get_db() as conn:
+        assert conn.execute("SELECT categoria FROM compromissos WHERE ano=2026").fetchone()['categoria'] == 'formada'
+    # ano sem carta: congregação informa, pastor confirma
+    # ano sem carta: com os dízimos do ano anterior o sistema define classificação e liquidação
+    dados = {'acao': 'porcentagens', 'ano': 2027}
+    dados.update({f'm{i}': '900,00' for i in range(12)})   # média 900 (SM 2026 = 1.621): em formação, sem Betel
+    tes.post('/configuracoes', data=dados)
+    with appmod.get_db() as conn:
+        c = conn.execute("SELECT * FROM compromissos WHERE ano=2027").fetchone()
+        assert (c['categoria'], c['fundo_local_pct'], c['betel'], c['nivelacao'], c['confirmado_em'], c['meses']) == ('formacao', 0, 0, 0, None, 12)
+    pas = entrar(app, 'vr.pastor', 'pastor12345')
+    dados.update({f'm{i}': '2.500,00' for i in range(12)})  # 2.500 > 1,25 SM: formada, nivelação, Betel, fundo 1%
+    pas.post('/configuracoes', data=dados)
+    with appmod.get_db() as conn:
+        c = conn.execute("SELECT * FROM compromissos WHERE ano=2027").fetchone()
+        assert (c['categoria'], c['fundo_local_pct'], c['betel'], c['nivelacao']) == ('formada', 1, 1, 1) and c['confirmado_em']
+    assert 'já foram confirmadas' in tes.post('/configuracoes', data=dados, follow_redirects=True).get_data(as_text=True)
+    # lançamento com nome -> recibo com valor por extenso e nomes
+    r = tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Saída', 'item': 'Serviços Públicos (água, luz)', 'valor': '1.250,50',
+                                       'mes': 'outubro', 'ano': 2026, 'pessoa': 'Sabesp', 'voltar': 'lancar'})
+    tid = int(r.headers['Location'].split('ultimo=')[1])
+    assert 'Imprimir recibo' in tes.get(r.headers['Location']).get_data(as_text=True)
+    rec = tes.get(f'/recibo/lancamento/{tid}').get_data(as_text=True)
+    assert 'mil duzentos e cinquenta reais e cinquenta centavos' in rec and 'Sabesp' in rec and 'Irmã Beltrana' in rec
+    with appmod.get_db() as conn:
+        did = conn.execute('SELECT id FROM dizimos ORDER BY id LIMIT 1').fetchone()['id']
+    assert 'Dízimos' in tes.get(f'/recibo/dizimo/{did}').get_data(as_text=True)
+    assert tes.get('/recibo/lancamento/999999').status_code == 404
+    # livros, balanço e central de impressão
+    ano = tes.get('/livro-do-mes?ano=2026&periodo=ano').get_data(as_text=True)
+    assert 'LIVRO CAIXA DO ANO' in ano and 'Pr. Fulano de Tal' in ano and 'Serviços Públicos' in ano
+    so = tes.get('/livro-do-mes?ano=2026&mes=10&livro=Projetos').get_data(as_text=True)
+    assert 'LIVRO PROJETOS' in so and 'Sabesp' not in so
+    bal = tes.get('/balanco?ano=2026').get_data(as_text=True)
+    assert 'Balanço por livro' in bal and 'g-mensal' in bal and 'Sustento pastoral' in bal
+    assert tes.get('/balanco?ano=2026&mes=9').status_code == 200
+    assert 'Relatório dos envios' in tes.get('/imprimir?ano=2026&mes=9').get_data(as_text=True)
+
+
+def test_valor_extenso():
+    assert appmod.valor_extenso(3014.11) == 'três mil e quatorze reais e onze centavos'
+    assert appmod.valor_extenso(100) == 'cem reais'
+    assert appmod.valor_extenso(1) == 'um real'
+
+
+def test_cadastro_obrigatorio_livro_excel_e_tutorial(app):
+    import openpyxl
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    adm = entrar(app, 'nacional', 'senha-forte-123')
+    adm.post('/admin/nova', data={'nome': 'Nova Esperança', 'tes_nome': 'Maria Souza', 'tes_usuario': 'ne.tes', 'tes_senha': 'tesoureiro123',
+                                  'pas_nome': 'Pr. João', 'pas_usuario': 'ne.pas', 'pas_senha': 'pastor12345'})
+    tes = entrar(app, 'ne.tes', 'tesoureiro123')
+    # nomes já vêm da criação; sem a classificação do ano, nada é liberado
+    r = tes.get('/lancar?tipo=Entrada')
+    assert r.status_code == 302 and '/configuracoes' in r.headers['Location']
+    r = tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Entrada', 'item': 'Votos', 'valor': '10', 'mes': 'outubro', 'ano': date.today().year})
+    assert '/configuracoes' in r.headers['Location']
+    assert '/configuracoes' in tes.get('/dizimos').headers['Location']
+    pagina = tes.get('/configuracoes').get_data(as_text=True)
+    assert 'Maria Souza' in pagina and 'Pr. João' in pagina
+    # congregação nova: tudo em zero, começa do zero
+    tes.post('/configuracoes', data={'acao': 'porcentagens', 'ano': date.today().year})
+    with appmod.get_db() as conn:
+        c = conn.execute("SELECT c.* FROM compromissos c JOIN congregacoes g ON g.id=c.cong_id WHERE g.nome='Nova Esperança'").fetchone()
+        assert c['categoria'] == 'nova' and c['fundo_local_pct'] == 0
+    pag = tes.get('/lancar?tipo=Saída').get_data(as_text=True)
+    assert 'Em qual <b>livro</b>' in pag and 'livro-escolha' in pag
+    # exportação
+    r = tes.get(f'/exportar/excel?ano={date.today().year}')
+    wb = openpyxl.load_workbook(io.BytesIO(r.data))
+    assert wb.sheetnames[:3] == ['Cadastro', 'Lançamentos', 'Caixa local'] and 'Dízimos' in wb.sheetnames and 'Balanço' in wb.sheetnames
+    assert 'Ordem do trabalho'.lower() in tes.get('/tutorial').get_data(as_text=True).lower()

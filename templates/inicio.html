@@ -1,0 +1,144 @@
+{% extends 'base.html' %}
+{% block title %}Início — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Início</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2">
+  <div>
+    <h1 class="page-title mb-0">{{ session.get('cong_nome') }}</h1>
+    <p class="text-muted mb-0">Tesouraria local · {{ nome_mes | capitalize }} de {{ ano }}</p>
+  </div>
+  <form class="d-flex gap-2 align-items-center">
+    <select name="mes" class="form-select form-select-sm" style="width:140px" onchange="this.form.submit()">
+      {% for m in MESES %}<option value="{{ loop.index }}" {% if loop.index == mes %}selected{% endif %}>{{ m | capitalize }}</option>{% endfor %}
+    </select>
+    <select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
+      {% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}
+    </select>
+  </form>
+</div>
+
+{% if falta %}
+<a href="{{ url_for('configuracoes') }}" class="guia aviso-config mb-3">
+  <span class="guia-num" style="background:#f39c12">0</span>
+  <span class="guia-txt"><b>Primeiro passo obrigatório: cadastro da congregação</b>
+    <small>Falta cadastrar {{ falta | join(', ') }}. Sem o cadastro, o sistema não libera os lançamentos.</small></span>
+  <i class="bi bi-chevron-right"></i>
+</a>
+{% endif %}
+
+<!-- Passo 1: orçamento -->
+<a href="{{ url_for('orcamento', ano=ano) }}" class="guia guia-orc mb-3">
+  <span class="guia-num">1</span>
+  <span class="guia-txt"><b>Orçamento do ano</b>
+    <small>{% if orc %}Orçado em saídas: {{ orc | brl }} · gasto até agora: {{ sai_ano | brl }} ({{ '%.0f' | format(sai_ano / orc * 100) }}%){% else %}Defina quanto a congregação espera receber e gastar em {{ ano }}.{% endif %}</small>
+  </span>
+  <i class="bi bi-chevron-right"></i>
+</a>
+
+<!-- Passo 2: lançar (destaque) -->
+<div class="comece mb-2"><span class="guia-num d-inline-flex me-1" style="width:22px;height:22px;font-size:.7rem">2</span> Os lançamentos começam aqui</div>
+<div class="row g-3 mb-3">
+  <div class="col-md-6">
+    <a href="{{ url_for('lancar', tipo='Entrada') }}" class="guia guia-entrada guia-grande h-100">
+      <i class="bi bi-arrow-down-circle-fill text-success"></i>
+      <span class="guia-txt"><b>ENTRADA</b>
+        <small>Dinheiro que entrou: ofertas dos cultos, votos, cantina, brechó, ofertas missionárias…</small>
+        <small class="fw-semibold text-success">Neste mês: {{ ent_mes | brl }}</small></span>
+      <i class="bi bi-chevron-right"></i>
+    </a>
+  </div>
+  <div class="col-md-6">
+    <a href="{{ url_for('lancar', tipo='Saída') }}" class="guia guia-saida guia-grande h-100">
+      <i class="bi bi-arrow-up-circle-fill text-danger"></i>
+      <span class="guia-txt"><b>SAÍDA</b>
+        <small>Dinheiro que saiu: aluguel, água e luz, manutenção, materiais, evangelismo…</small>
+        <small class="fw-semibold text-danger">Neste mês: {{ sai_mes | brl }}</small></span>
+      <i class="bi bi-chevron-right"></i>
+    </a>
+  </div>
+</div>
+<a href="{{ url_for('dizimos', ano=ano) }}" class="guia guia-dizimo mb-4">
+  <i class="bi bi-cash-coin fs-3 text-primary"></i>
+  <span class="guia-txt"><b>DÍZIMOS</b>
+    <small>{% if comp %}Divididos sozinhos pelas porcentagens de {{ ano }}: fundo local {{ comp['fundo_local_pct'] }}%{% if comp['nivelacao'] %}, nivelação{% endif %}{% if comp['betel'] %}, Betel{% endif %}.{% else %}Cadastre as porcentagens em Configurar a congregação.{% endif %}
+      · Neste mês: {{ diz_mes | brl }}</small></span>
+  <i class="bi bi-chevron-right"></i>
+</a>
+
+<!-- Resumo do mês -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="stat-card entrada"><div class="stat-label">Entradas do mês</div><div class="stat-value text-entrada">{{ ent_mes | brl }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card saida"><div class="stat-label">Saídas do mês</div><div class="stat-value text-saida">{{ sai_mes | brl }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card dizimo"><div class="stat-label">Dízimos do mês</div><div class="stat-value">{{ diz_mes | brl }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card saldo"><div class="stat-label">Saldo em caixa</div><div class="stat-value" style="color:#1a5276">{{ saldo | brl }}</div></div></div>
+</div>
+
+<!-- Passo 3: livros -->
+<h6 class="text-uppercase text-muted small fw-bold mb-2">3 · Livros de {{ nome_mes }}</h6>
+<div class="row g-3 mb-4">
+  {% set icones = {'FundoLocal':'bi-wallet2','Projetos':'bi-hammer','Envios':'bi-send','LiqDízimos':'bi-cash-coin'} %}
+  {% for lv, v in livros.items() %}
+  <div class="col-6 col-lg-3">
+    <a href="{{ url_for('lancamentos', ano=ano, mes=nome_mes, livro=lv) }}" class="livro-card">
+      <div class="fw-bold"><i class="bi {{ icones[lv] }} me-1"></i>{{ 'Caixa local' if lv == 'FundoLocal' else livros_labels[lv] }}</div>
+      <div class="small text-entrada">+ {{ v.e | brl }}</div>
+      <div class="small text-saida">− {{ v.s | brl }}</div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+
+<!-- Passo 4: fechar, imprimir, balanço -->
+<div class="row g-3 mb-4">
+  <div class="col-md-4">
+    <a href="{{ url_for('fechamento', ano=ano, mes=mes) }}" class="guia h-100">
+      <span class="guia-num">4</span>
+      <span class="guia-txt"><b><i class="bi bi-lock me-1"></i>Fechar {{ nome_mes }}</b>
+        <small>{% if fech %}{{ STATUS_FECH[fech['status']][0] }} · {{ fech['total'] | brl }}{% else %}Calcula os envios e gera o relatório para a nacional.{% endif %}</small></span>
+      <i class="bi bi-chevron-right"></i>
+    </a>
+  </div>
+  <div class="col-md-4">
+    <a href="{{ url_for('imprimir', ano=ano, mes=mes) }}" class="guia h-100">
+      <span class="guia-num">5</span>
+      <span class="guia-txt"><b><i class="bi bi-printer me-1"></i>Imprimir</b>
+        <small>Livros do mês e do ano, relatório dos envios e recibos.</small></span>
+      <i class="bi bi-chevron-right"></i>
+    </a>
+  </div>
+  <div class="col-md-4">
+    <a href="{{ url_for('balanco', ano=ano) }}" class="guia h-100">
+      <span class="guia-num">6</span>
+      <span class="guia-txt"><b><i class="bi bi-bar-chart-line me-1"></i>Balanço e gráficos</b>
+        <small>De onde veio e para onde foi o dinheiro em {{ ano }}.</small></span>
+      <i class="bi bi-chevron-right"></i>
+    </a>
+  </div>
+</div>
+
+<!-- Últimos lançamentos -->
+<div class="table-card">
+  <div class="table-header d-flex justify-content-between align-items-center">
+    <h6 class="mb-0"><i class="bi bi-clock-history me-2 text-primary"></i>Últimos lançamentos</h6>
+    <a href="{{ url_for('lancamentos', ano=ano) }}" class="small">Ver todos</a>
+  </div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <tbody>
+        {% for t in recentes %}
+        <tr>
+          <td class="small text-muted">{{ t['data_registro'] or '' }}</td>
+          <td class="small">{{ livros_labels[t['livro']] if t['livro'] != 'FundoLocal' else 'Caixa local' }}</td>
+          <td class="small">{{ t['item'] }}</td>
+          <td class="text-end fw-semibold {% if t['tipo']=='Entrada' %}text-entrada{% else %}text-saida{% endif %}">{{ '+' if t['tipo']=='Entrada' else '−' }} {{ t['valor'] | brl }}</td>
+          <td class="text-end"><a href="{{ url_for('recibo', tipo='lancamento', rid=t['id']) }}" target="_blank" title="Recibo" class="btn btn-sm btn-link py-0"><i class="bi bi-receipt"></i></a></td>
+        </tr>
+        {% else %}
+        <tr><td class="text-center text-muted py-4">Nenhum lançamento ainda. Comece por “Registrar ENTRADA”.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

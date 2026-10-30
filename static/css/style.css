@@ -376,3 +376,52 @@ body {
 .carta-head .sede { text-align: right; font-size: .78rem; color: #5d6d7e; }
 
 .sidebar-footer .text-muted { color: rgba(255,255,255,.65) !important; }
+
+/* ── Página inicial guiada ── */
+.guia { display: flex; align-items: center; gap: 14px; background: #fff; border: 1px solid #e3e7ee; border-radius: 14px;
+  padding: 16px 18px; text-decoration: none; color: #1b2340; box-shadow: var(--card-shadow); transition: transform .12s, border-color .12s; }
+.guia:hover { transform: translateY(-1px); border-color: #1a5276; color: #1b2340; }
+.guia .guia-num { width: 34px; height: 34px; border-radius: 50%; background: #1a3a5c; color: #fff; display: flex; align-items: center;
+  justify-content: center; font-weight: 700; flex-shrink: 0; }
+.guia .guia-txt { flex: 1; display: flex; flex-direction: column; }
+.guia .guia-txt b { font-size: 1.05rem; }
+.guia .guia-txt small { color: #6b7a8c; }
+.guia-orc { border-left: 5px solid #f39c12; }
+.guia-entrada { border-left: 5px solid #27ae60; } .guia-entrada b { color: #1e8449; }
+.guia-saida { border-left: 5px solid #e74c3c; } .guia-saida b { color: #c0392b; }
+.guia-dizimo { border-left: 5px solid #2980b9; }
+.livro-card { display: block; background: #fff; border: 1px solid #e3e7ee; border-radius: 12px; padding: 12px 14px; text-decoration: none; color: #1b2340; box-shadow: var(--card-shadow); }
+.livro-card:hover { border-color: #1a5276; color: #1b2340; }
+
+/* ── Configuração, balanço e impressão ── */
+.calc-box { background: #f6f8fc; border: 1px solid #e3e7ee; border-radius: 10px; padding: 10px 14px; }
+.barra { height: 8px; background: #eef1f5; border-radius: 999px; overflow: hidden; }
+.barra span { display: block; height: 100%; border-radius: 999px; }
+.so-impressao { display: none; }
+.aviso-config { border-left: 5px solid #f39c12; }
+.guia-grande { padding: 24px 22px; min-height: 120px; }
+.guia-grande b { font-size: 1.35rem; }
+.guia-grande .bi-arrow-down-circle-fill, .guia-grande .bi-arrow-up-circle-fill { font-size: 2.6rem; }
+.guia-entrada.guia-grande { background: linear-gradient(90deg, #eafaf1, #fff 70%); }
+.guia-saida.guia-grande { background: linear-gradient(90deg, #fdedec, #fff 70%); }
+.comece { font-size: .72rem; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: #7f8c9a; }
+@media print {
+  .sidebar, .topbar, .nao-imprimir, .alert, .btn { display: none !important; }
+  .main-content { margin: 0 !important; padding: 0 !important; }
+  .page-content { padding: 0 !important; }
+  body { background: #fff !important; }
+  .so-impressao { display: flex !important; }
+  .topo-impressao { align-items: center; gap: 14px; border-bottom: 2px solid #25307a; padding-bottom: 8px; margin-bottom: 14px; }
+  .topo-impressao img { width: 80px; }
+  .assinaturas { gap: 40px; margin-top: 40px; }
+  .assinaturas div { flex: 1; border-top: 1px solid #1b2340; text-align: center; padding-top: 4px; }
+  .table-card, .stat-card, .form-card { box-shadow: none !important; break-inside: avoid; }
+  .barra span, .stat-card { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}
+.livro-escolha { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; text-align: left; background: #fff;
+  border: 2px solid #e3e7ee; border-radius: 14px; padding: 18px; box-shadow: var(--card-shadow); color: #1b2340; transition: border-color .12s, transform .12s; }
+.livro-escolha:hover { border-color: #1a5276; transform: translateY(-1px); }
+.livro-escolha i { font-size: 1.8rem; color: #1a3a5c; }
+.livro-escolha b { font-size: 1.1rem; }
+.livro-escolha small { color: #7f8c9a; }
+.badge-livro { display: inline-block; background: #1a3a5c; color: #fff; border-radius: 999px; padding: 3px 12px; font-size: .8rem; font-weight: 600; }

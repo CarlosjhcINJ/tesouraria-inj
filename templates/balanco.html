@@ -1,0 +1,184 @@
+{% extends 'base.html' %}
+{% block title %}Balanço — {{ periodo_txt }} — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Balanço</li>{% endblock %}
+
+{% block content %}
+<div class="so-impressao topo-impressao">
+  <img src="{{ url_for('static', filename='img/logo-inj.png') }}" alt="Igreja do Nome de Jesus"/>
+  <div><b>IGREJA DO NOME DE JESUS — {{ cong['nome'] }}</b><br/>Balanço · {{ periodo_txt }}<br/>
+    <small>Pastor: {{ cfg.get('nome_pastor') or '—' }} · Tesoureiro(a): {{ cfg.get('nome_tesoureiro') or '—' }}</small></div>
+</div>
+
+<div class="d-flex align-items-center justify-content-between mb-3 flex-wrap gap-2 nao-imprimir">
+  <div>
+    <h1 class="page-title mb-0">Balanço</h1>
+    <p class="text-muted mb-0 small">{{ periodo_txt }} · de onde veio e para onde foi o dinheiro</p>
+  </div>
+  <form class="d-flex gap-2 align-items-center">
+    <select name="mes" class="form-select form-select-sm" style="width:150px" onchange="this.form.submit()">
+      <option value="0" {% if not mes %}selected{% endif %}>Ano inteiro</option>
+      {% for m in MESES %}<option value="{{ loop.index }}" {% if loop.index == mes %}selected{% endif %}>{{ m | capitalize }}</option>{% endfor %}
+    </select>
+    <select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
+      {% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}
+    </select>
+    <button type="button" class="btn btn-sm btn-primary" onclick="window.print()"><i class="bi bi-printer me-1"></i>Imprimir</button>
+  </form>
+</div>
+
+{% set resultado = tot_e - tot_s %}
+{% set saldo_final = livros | sum(attribute='final') %}
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-3"><div class="stat-card entrada"><div class="stat-label">Entradas</div><div class="stat-value text-entrada">{{ tot_e | brl }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card saida"><div class="stat-label">Saídas</div><div class="stat-value text-saida">{{ tot_s | brl }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card dizimo"><div class="stat-label">Resultado</div>
+    <div class="stat-value {{ 'text-entrada' if resultado >= 0 else 'text-saida' }}">{{ resultado | brl }}</div>
+    <div class="stat-sub">{{ 'Sobrou' if resultado >= 0 else 'Faltou' }} no período</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card saldo"><div class="stat-label">Saldo no fim do período</div><div class="stat-value" style="color:#1a5276">{{ saldo_final | brl }}</div>
+    <div class="stat-sub">Soma de todos os livros</div></div></div>
+</div>
+
+<!-- Gráficos -->
+<div class="row g-3 mb-4">
+  <div class="col-lg-8">
+    <div class="table-card p-3 h-100">
+      <h6 class="fw-bold mb-1">Entradas e saídas mês a mês — {{ ano }}</h6>
+      <div class="small text-muted mb-2">Barras: entradas e saídas. Linha: saldo acumulado.</div>
+      <div style="height:280px"><canvas id="g-mensal"></canvas></div>
+    </div>
+  </div>
+  <div class="col-lg-4">
+    <div class="table-card p-3 h-100">
+      <h6 class="fw-bold mb-2">Para onde foi o dinheiro</h6>
+      {% if saidas %}<div style="height:280px"><canvas id="g-saidas"></canvas></div>
+      {% else %}<p class="text-muted small mt-4 text-center">Sem saídas no período.</p>{% endif %}
+    </div>
+  </div>
+</div>
+
+<!-- Balanço por livro -->
+<div class="table-card mb-4">
+  <div class="table-header"><h6 class="mb-0"><i class="bi bi-journals me-2 text-primary"></i>Balanço por livro</h6></div>
+  <div class="table-responsive"><table class="table table-sm mb-0">
+    <thead><tr><th>Livro</th><th class="text-end">Saldo anterior</th><th class="text-end">Entradas</th><th class="text-end">Saídas</th><th class="text-end">Saldo final</th></tr></thead>
+    <tbody>
+      {% for l in livros %}
+      <tr><td>{{ l.nome }}</td><td class="text-end">{{ l.anterior | brl }}</td><td class="text-end text-entrada">{{ l.e | brl }}</td>
+        <td class="text-end text-saida">{{ l.s | brl }}</td><td class="text-end fw-bold">{{ l.final | brl }}</td></tr>
+      {% endfor %}
+      <tr class="fw-bold" style="background:#eef3fb"><td>TOTAL</td><td class="text-end">{{ livros | sum(attribute='anterior') | brl }}</td>
+        <td class="text-end">{{ livros | sum(attribute='e') | brl }}</td><td class="text-end">{{ livros | sum(attribute='s') | brl }}</td><td class="text-end">{{ saldo_final | brl }}</td></tr>
+    </tbody>
+  </table></div>
+  <div class="small text-muted px-3 py-2">Os livros incluem os repasses internos (ex.: aporte da liquidação de dízimos ao caixa local). Os totais de entradas e saídas acima não os contam em dobro.</div>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Entradas -->
+  <div class="col-lg-6">
+    <div class="table-card h-100">
+      <div class="table-header"><h6 class="mb-0 text-entrada"><i class="bi bi-arrow-down-circle me-2"></i>Entradas por tipo</h6></div>
+      <table class="table table-sm mb-0">
+        {% for x in entradas %}
+        <tr><td class="small">{{ x.item }}<div class="text-muted" style="font-size:.7rem">{{ livro_nome[x.livro] }}</div></td>
+          <td style="width:30%"><div class="barra"><span style="width:{{ (x.t / tot_e * 100) if tot_e else 0 }}%;background:#27ae60"></span></div></td>
+          <td class="text-end small">{{ x.t | brl }}</td></tr>
+        {% else %}<tr><td class="text-muted small">Sem entradas.</td></tr>{% endfor %}
+        <tr class="fw-bold"><td>Total</td><td></td><td class="text-end text-entrada">{{ tot_e | brl }}</td></tr>
+      </table>
+    </div>
+  </div>
+  <!-- Saídas -->
+  <div class="col-lg-6">
+    <div class="table-card h-100">
+      <div class="table-header"><h6 class="mb-0 text-saida"><i class="bi bi-arrow-up-circle me-2"></i>Saídas por tipo</h6></div>
+      <table class="table table-sm mb-0">
+        {% for x in saidas %}
+        <tr><td class="small">{{ x.item }}<div class="text-muted" style="font-size:.7rem">{{ livro_nome[x.livro] }}</div></td>
+          <td style="width:30%"><div class="barra"><span style="width:{{ (x.t / tot_s * 100) if tot_s else 0 }}%;background:#e74c3c"></span></div></td>
+          <td class="text-end small">{{ x.t | brl }}</td></tr>
+        {% else %}<tr><td class="text-muted small">Sem saídas.</td></tr>{% endfor %}
+        <tr class="fw-bold"><td>Total</td><td></td><td class="text-end text-saida">{{ tot_s | brl }}</td></tr>
+      </table>
+    </div>
+  </div>
+</div>
+
+<div class="row g-3 mb-4">
+  <!-- Dízimos -->
+  <div class="col-lg-5">
+    <div class="table-card p-3 h-100">
+      <h6 class="fw-bold mb-2"><i class="bi bi-cash-coin me-2 text-primary"></i>Dízimos do período</h6>
+      <div class="calc-linha"><span>Dízimo bruto recebido</span><b class="v">{{ diz['bruto'] | brl }}</b></div>
+      <div class="calc-linha"><span>Enviado à nacional (DD, nivelação, Betel)</span><b class="v text-saida">{{ diz['nac'] | brl }}</b></div>
+      <div class="calc-linha"><span>Aporte ao caixa local</span><b class="v">{{ diz['fl'] | brl }}</b></div>
+      <div class="calc-linha total"><span>Sustento pastoral</span><b class="v">{{ diz['liq'] | brl }}</b></div>
+    </div>
+  </div>
+  <!-- Orçado x realizado -->
+  <div class="col-lg-7">
+    <div class="table-card h-100">
+      <div class="table-header"><h6 class="mb-0"><i class="bi bi-pie-chart me-2 text-primary"></i>Orçado x realizado ({{ ano }})</h6></div>
+      {% if orc_vs %}
+      <table class="table table-sm mb-0">
+        <thead><tr><th>Item</th><th class="text-end">Orçado</th><th class="text-end">Realizado</th><th style="width:28%"></th></tr></thead>
+        {% for o in orc_vs %}{% set pct = (o.real / o.orcado * 100) if o.orcado else 0 %}
+        <tr><td class="small">{{ o.item }} <span class="badge {{ 'bg-success' if o.tipo == 'Entrada' else 'bg-danger' }} bg-opacity-75" style="font-size:.6rem">{{ o.tipo }}</span></td>
+          <td class="text-end small">{{ o.orcado | brl }}</td><td class="text-end small">{{ o.real | brl }}</td>
+          <td>{% if o.orcado %}<div class="barra"><span style="width:{{ [pct, 100] | min }}%;background:{{ '#c0392b' if o.tipo == 'Saída' and pct > 100 else '#1d6fb8' }}"></span></div>
+            <div class="text-muted" style="font-size:.7rem">{{ '%.0f' | format(pct) }}%</div>{% else %}<span class="text-muted small">sem orçamento</span>{% endif %}</td></tr>
+        {% endfor %}
+      </table>
+      {% else %}
+      <p class="small text-muted p-3 mb-0">Ainda não há orçamento para {{ ano }}. <a href="{{ url_for('orcamento', ano=ano) }}">Fazer o orçamento</a>.</p>
+      {% endif %}
+    </div>
+  </div>
+</div>
+
+<div class="so-impressao assinaturas">
+  <div>Pastor<br/><b>{{ cfg.get('nome_pastor') or '' }}</b></div>
+  <div>Tesoureiro(a)<br/><b>{{ cfg.get('nome_tesoureiro') or '' }}</b></div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const M = {{ mensal_json | safe }};
+  const brl = v => 'R$ ' + Number(v).toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+  Chart.defaults.font.family = 'Inter, system-ui, sans-serif';
+  new Chart(document.getElementById('g-mensal'), {
+    data: {
+      labels: M.map(m => m.mes),
+      datasets: [
+        {type: 'bar', label: 'Entradas', data: M.map(m => m.e), backgroundColor: '#27ae60', borderRadius: 4, order: 2},
+        {type: 'bar', label: 'Saídas', data: M.map(m => m.s), backgroundColor: '#e74c3c', borderRadius: 4, order: 2},
+        {type: 'line', label: 'Saldo acumulado', data: M.map(m => m.saldo), borderColor: '#25307a', backgroundColor: '#25307a',
+         tension: .3, pointRadius: 3, order: 1}
+      ]
+    },
+    options: {
+      maintainAspectRatio: false, animation: false,
+      plugins: {legend: {position: 'bottom'}, tooltip: {callbacks: {label: c => c.dataset.label + ': ' + brl(c.parsed.y)}}},
+      scales: {y: {ticks: {callback: v => 'R$ ' + Number(v).toLocaleString('pt-BR')}}}
+    }
+  });
+  const el = document.getElementById('g-saidas');
+  if (el) {
+    const S = {{ saidas | tojson }};
+    const top = S.slice(0, 6), resto = S.slice(6).reduce((a, x) => a + x.t, 0);
+    const labels = top.map(x => x.item), data = top.map(x => x.t);
+    if (resto > 0) { labels.push('Outros'); data.push(resto); }
+    new Chart(el, {
+      type: 'doughnut',
+      data: {labels, datasets: [{data, borderWidth: 2, borderColor: '#fff',
+        backgroundColor: ['#25307a', '#1d6fb8', '#5dade2', '#c0392b', '#e67e22', '#f4d03f', '#95a5a6']}]},
+      options: {maintainAspectRatio: false, animation: false, cutout: '58%',
+        plugins: {legend: {position: 'bottom', labels: {boxWidth: 12, font: {size: 11}}},
+                  tooltip: {callbacks: {label: c => c.label + ': ' + brl(c.parsed)}}}}
+    });
+  }
+})();
+</script>
+{% endblock %}

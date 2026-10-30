@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>Recibo {{ r.numero }} — {{ cong['nome'] }}</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet"/>
+<style>
+  :root { --navy:#25307a; --azul:#1d6fb8; --cinza:#5d6d7e; --verde:#1e8449; --verm:#a93226; }
+  * { box-sizing: border-box; }
+  body { font-family: 'Inter', Arial, sans-serif; color: #1b2340; margin: 0; background: #eef1f6; font-size: 13px; }
+  .acoes { max-width: 820px; margin: 14px auto 0; display: flex; gap: 8px; justify-content: flex-end; }
+  .acoes button, .acoes a { font: inherit; font-weight: 600; background: var(--navy); color: #fff; border: 0; border-radius: 8px; padding: 8px 16px; cursor: pointer; text-decoration: none; }
+  .acoes a { background: #fff; color: var(--navy); border: 1px solid var(--navy); }
+  .via { background: #fff; max-width: 820px; margin: 14px auto; padding: 18px 24px; border: 2px solid var(--navy); border-radius: 12px; page-break-inside: avoid; }
+  .topo { display: flex; align-items: center; gap: 14px; border-bottom: 2px solid var(--navy); padding-bottom: 10px; }
+  .topo img { width: 84px; }
+  .topo .igreja { font-weight: 800; color: var(--navy); font-size: 15px; }
+  .topo .end { color: var(--cinza); font-size: 11px; }
+  .num { margin-left: auto; text-align: right; }
+  .num .t { font-size: 18px; font-weight: 800; letter-spacing: .06em; color: var(--navy); }
+  .num .n { color: var(--cinza); font-size: 12px; }
+  .valor { margin: 14px 0 6px; display: flex; align-items: baseline; gap: 10px; }
+  .valor .v { font-size: 26px; font-weight: 800; padding: 4px 12px; border-radius: 8px; background: #eef3fb; }
+  .e .valor .v { color: var(--verde); } .s .valor .v { color: var(--verm); }
+  .ext { font-style: italic; color: #34405f; }
+  .linha { margin: 10px 0; line-height: 1.7; }
+  .linha b { border-bottom: 1px dotted #9aa6bd; padding: 0 4px; }
+  .rodape { display: flex; gap: 30px; margin-top: 34px; }
+  .rodape div { flex: 1; border-top: 1px solid #1b2340; text-align: center; padding-top: 4px; font-size: 12px; }
+  .via-tag { font-size: 10px; text-transform: uppercase; letter-spacing: .1em; color: var(--cinza); text-align: right; margin-top: 8px; }
+  .corte { max-width: 820px; margin: 0 auto; border-top: 1px dashed #9aa6bd; text-align: center; font-size: 10px; color: var(--cinza); }
+  @media print { body { background: #fff; } .acoes { display: none; } .via { margin: 0 0 10mm; } }
+</style>
+</head>
+<body>
+<div class="acoes"><a href="javascript:history.back()">Voltar</a><button onclick="window.print()">Imprimir recibo</button></div>
+{% for via in ['Via da igreja', 'Via de quem ' ~ ('entregou' if r.entrada else 'recebeu')] %}
+<div class="via {{ 'e' if r.entrada else 's' }}">
+  <div class="topo">
+    <img src="{{ url_for('static', filename='img/logo-inj.png') }}" alt="Igreja do Nome de Jesus"/>
+    <div>
+      <div class="igreja">IGREJA DO NOME DE JESUS</div>
+      <div>{{ cong['nome'] }}</div>
+      <div class="end">{{ cfg.get('endereco') or '' }}</div>
+    </div>
+    <div class="num"><div class="t">{{ 'RECIBO' if r.entrada else 'RECIBO DE PAGAMENTO' }}</div><div class="n">Nº {{ r.numero }}</div></div>
+  </div>
+
+  <div class="valor"><span class="v">{{ r.valor | brl }}</span><span class="ext">({{ r.valor | extenso }})</span></div>
+
+  {% if r.entrada %}
+  <div class="linha">Recebemos de <b>{{ r.pessoa or '_______________________________________' }}</b>
+    a importância acima, referente a <b>{{ r.referente }}</b>{% if r.forma %}, em <b>{{ r.forma | lower }}</b>{% endif %}.</div>
+  {% else %}
+  <div class="linha">Eu, <b>{{ r.pessoa or '_______________________________________' }}</b>, recebi da Igreja do Nome de Jesus — {{ cong['nome'] }}
+    a importância acima, referente a <b>{{ r.referente }}</b>{% if r.forma %}, em <b>{{ r.forma | lower }}</b>{% endif %}.</div>
+  {% endif %}
+  {% if r.obs %}<div class="linha">Observação: {{ r.obs }}</div>{% endif %}
+  <div class="linha">Data: <b>{{ r.data or now().strftime('%d/%m/%Y') }}</b></div>
+
+  <div class="rodape">
+    {% if r.entrada %}
+    <div>Tesoureiro(a)<br/><b>{{ cfg.get('nome_tesoureiro') or '' }}</b></div>
+    <div>Pastor<br/><b>{{ cfg.get('nome_pastor') or '' }}</b></div>
+    {% else %}
+    <div>Quem recebeu<br/><b>{{ r.pessoa or '' }}</b></div>
+    <div>Tesoureiro(a)<br/><b>{{ cfg.get('nome_tesoureiro') or '' }}</b></div>
+    {% endif %}
+  </div>
+  <div class="via-tag">{{ via }}</div>
+</div>
+{% if loop.first %}<div class="corte">✂ recorte aqui</div>{% endif %}
+{% endfor %}
+</body>
+</html>

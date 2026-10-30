@@ -10,6 +10,7 @@
     {% if not u['ativo'] %}<span class="badge bg-secondary">inativo</span>{% endif %}
   </div>
   <div class="d-flex gap-1">
+    <button class="btn btn-xs btn-outline-primary" style="padding:2px 8px;font-size:.72rem" data-bs-toggle="modal" data-bs-target="#editar{{ u['id'] }}" title="Trocar nome ou usuário"><i class="bi bi-pencil"></i></button>
     <button class="btn btn-xs btn-outline-warning" style="padding:2px 8px;font-size:.72rem" data-bs-toggle="modal" data-bs-target="#senha{{ u['id'] }}" title="Redefinir senha"><i class="bi bi-key"></i></button>
     {% if u['id'] != session.get('user_id') %}
     <form method="POST" action="{{ url_for('admin_toggle_usuario', uid=u['id']) }}">
@@ -23,6 +24,17 @@
     <div class="modal-header"><h6 class="modal-title">Nova senha — {{ u['usuario'] }}</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body"><input type="password" name="nova_senha" class="form-control form-control-sm" required minlength="8" placeholder="Mínimo 8 caracteres"/></div>
     <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-sm btn-warning">Redefinir</button></div>
+  </form>
+</div></div></div>
+<div class="modal fade" id="editar{{ u['id'] }}" tabindex="-1"><div class="modal-dialog modal-sm"><div class="modal-content">
+  <form method="POST" action="{{ url_for('admin_editar_usuario', uid=u['id']) }}">
+    <div class="modal-header"><h6 class="modal-title">Trocar nome ou usuário</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+    <div class="modal-body">
+      <label class="form-label small mb-0">Nome</label><input type="text" name="nome" class="form-control form-control-sm mb-2" value="{{ u['nome'] }}" required/>
+      <label class="form-label small mb-0">Usuário (para entrar)</label><input type="text" name="usuario" class="form-control form-control-sm" value="{{ u['usuario'] }}" required pattern="[a-z0-9._\-]+"/>
+      <div class="form-text">A senha não muda.</div>
+    </div>
+    <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-sm btn-primary">Salvar</button></div>
   </form>
 </div></div></div>
 {% endmacro %}
@@ -41,7 +53,8 @@
     {% for c in congs %}
     <div class="form-card mb-3 {% if not c['ativo'] %}opacity-50{% endif %}">
       <div class="d-flex justify-content-between align-items-center mb-2">
-        <div class="fw-bold">{{ c['nome'] }} {% if not c['ativo'] %}<span class="badge bg-secondary">inativa</span>{% endif %}</div>
+        <div class="fw-bold">{{ c['nome'] }} {% if not c['ativo'] %}<span class="badge bg-secondary">inativa</span>{% endif %}
+          {% if c['ativo'] %}<a href="{{ url_for('ver_congregacao', cid=c['id']) }}" class="btn btn-sm btn-success ms-2"><i class="bi bi-box-arrow-in-right me-1"></i>Abrir tesouraria</a>{% endif %}</div>
         <form method="POST" action="{{ url_for('admin_toggle_cong', cid=c['id']) }}">
           <button class="btn btn-sm btn-outline-secondary">{{ 'Desativar' if c['ativo'] else 'Ativar' }}</button>
         </form>

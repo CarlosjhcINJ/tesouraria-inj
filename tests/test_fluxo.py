@@ -370,3 +370,24 @@ def test_itens_completos_e_nomes_antigos(app):
     assert 'saídas do livro Envios' in pag and 'Raios de Luz' in pag
     orc = tes.get('/orcamento?ano=2026').get_data(as_text=True)
     assert 'Liquidação dos dízimos' in orc and 'Envio: Safras para Cristo' in orc
+
+
+def test_nacional_renomeia_usuario_e_abre_congregacao(app):
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    adm = entrar(app, 'nacional', 'senha-forte-123')
+    with appmod.get_db() as conn:
+        uid = conn.execute("SELECT id FROM usuarios WHERE usuario='nacional'").fetchone()['id']
+    # nome de usuário já usado: mensagem diz quem usa
+    r = adm.post('/admin/nova', data={'nome': 'Teste Dup', 'tes_nome': 'X', 'tes_usuario': 'nacional', 'tes_senha': 'tesoureiro123'},
+                 follow_redirects=True)
+    assert 'já é usado por' in r.get_data(as_text=True)
+    # a nacional troca o próprio usuário e libera o nome antigo
+    adm.post(f'/admin/usuario/{uid}/editar', data={'nome': 'Tesouraria Nacional', 'usuario': 'tesouraria.nacional'})
+    r = adm.post('/admin/nova', data={'nome': 'Jardim Teste', 'tes_nome': 'Ana', 'tes_usuario': 'nacional', 'tes_senha': 'tesoureiro123'})
+    assert '/ver/' in r.headers['Location']           # entra direto na congregação criada
+    adm.get(r.headers['Location'])
+    assert '/configuracoes' in adm.get('/lancar?tipo=Entrada').headers['Location']
+    with appmod.get_db() as conn:
+        conn.execute("UPDATE usuarios SET usuario='jt.tes' WHERE nome='Ana'")
+        conn.execute("UPDATE usuarios SET usuario='nacional' WHERE usuario='tesouraria.nacional'")

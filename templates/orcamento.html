@@ -124,15 +124,9 @@
               <table class="table table-sm">
                 <thead><tr><th>Item</th><th>Orc. Anual</th><th>Orc. Mensal</th></tr></thead>
                 <tbody>
-                {% set all_entrada_items = [] %}
-                {% for livro, cats in categorias.items() %}
-                  {% for item in cats.get('Entrada', []) %}
-                    {% if item not in all_entrada_items %}
-                      {% set _ = all_entrada_items.append(item) %}
-                    {% endif %}
-                  {% endfor %}
-                {% endfor %}
-                {% for item in all_entrada_items | sort %}
+                {% for titulo, itens in orc_grupos['Entrada'] if itens %}
+                  <tr class="table-light"><td colspan="3" class="small fw-bold text-uppercase" style="letter-spacing:.04em">{{ titulo }}</td></tr>
+                {% for item in itens %}
                   {% set orc = orc_map.get((item, 'Entrada')) %}
                   <tr>
                     <td class="small">
@@ -154,6 +148,7 @@
                   </tr>
                   <input type="hidden" name="obs[]" value="{{ orc.observacao if orc else '' }}"/>
                 {% endfor %}
+                {% endfor %}
                 </tbody>
               </table>
             </div>
@@ -166,15 +161,9 @@
               <table class="table table-sm">
                 <thead><tr><th>Item</th><th>Orc. Anual</th><th>Orc. Mensal</th></tr></thead>
                 <tbody>
-                {% set all_saida_items = [] %}
-                {% for livro, cats in categorias.items() %}
-                  {% for item in cats.get('Saída', []) %}
-                    {% if item not in all_saida_items %}
-                      {% set _ = all_saida_items.append(item) %}
-                    {% endif %}
-                  {% endfor %}
-                {% endfor %}
-                {% for item in all_saida_items | sort %}
+                {% for titulo, itens in orc_grupos['Saída'] if itens %}
+                  <tr class="table-light"><td colspan="3" class="small fw-bold text-uppercase" style="letter-spacing:.04em">{{ titulo }}</td></tr>
+                {% for item in itens %}
                   {% set orc = orc_map.get((item, 'Saída')) %}
                   <tr>
                     <td class="small">
@@ -195,6 +184,7 @@
                     </td>
                   </tr>
                   <input type="hidden" name="obs[]" value="{{ orc.observacao if orc else '' }}"/>
+                {% endfor %}
                 {% endfor %}
                 </tbody>
               </table>

@@ -41,6 +41,30 @@ LIVROS_LABELS = {
     'Envios': 'Envios / Missões',
     'LiqDízimos': 'Liquidação de Dízimos',
 }
+
+def _orc_grupos():
+    """Itens do orçamento por livro, com os mesmos nomes que os lançamentos e o fechamento usam."""
+    vistos = {'Entrada': set(), 'Saída': set()}
+
+    def g(tipo, titulo, itens):
+        its = [i for i in itens if i not in vistos[tipo]]
+        vistos[tipo].update(its)
+        return (titulo, its)
+    envios_nac = ['Envio: ' + rot for _, rot, _ in R.LINHAS_NACIONAL + R.LINHAS_DISTRITAL]
+    return {
+        'Entrada': [g('Entrada', 'Dízimos', ['Dízimo bruto do mês']),
+                    g('Entrada', 'Caixa local', CATEGORIAS['FundoLocal']['Entrada']),
+                    g('Entrada', 'Projetos', CATEGORIAS['Projetos']['Entrada']),
+                    g('Entrada', 'Envios (ofertas que vão para a nacional)', CATEGORIAS['Envios']['Entrada'])],
+        'Saída': [g('Saída', 'Liquidação dos dízimos (automático)', ['Envio Dízimo dos Dízimos 10%', 'Envio Nivelação 5%',
+                                                                     'Envio Betel 4%', 'Sustento pastoral (§ 66)']),
+                  g('Saída', 'Envios à nacional e à região (automático no fechamento)', envios_nac),
+                  g('Saída', 'Caixa local', CATEGORIAS['FundoLocal']['Saída']),
+                  g('Saída', 'Projetos', CATEGORIAS['Projetos']['Saída'])],
+    }
+
+
+
 LIVRO_NOME = {'FundoLocal': 'Caixa local', 'Projetos': 'Projetos', 'Envios': 'Envios / Missões',
               'LiqDízimos': 'Liquidação de Dízimos'}
 FORMAS = ['Dinheiro', 'Pix', 'Banco']
@@ -55,7 +79,7 @@ CATEGORIAS = {
             'Of. Domingo E.B.D.', 'Of. na Refam', 'Of. Social (Casos Especiais)',
             'Oferta de Cavalheiros', 'Oferta de Música', 'Oferta de Obra Social',
             'Outras Ofertas', 'Parceiros Missionários', 'Voto do Talento',
-            'Votos', 'Votos para Construção',
+            'Votos', 'Votos para Construção', 'Oferta das Crianças', 'Doações', 'Rendimentos Bancários',
         ]),
         'Saída': sorted([
             'Aluguel de Casa Pastoral', 'Aluguel de Caçamba',
@@ -73,6 +97,9 @@ CATEGORIAS = {
             'Produtos de Limpeza', 'Projetos da Diretoria Local',
             'Serviços Públicos (água, luz)', 'Trabalho com Crianças', 'Trabalho com Damas',
             'Trabalho com Jovens', 'Transporte Urbano', 'Viagens', 'Viagem para Assembleia',
+            'Conta de Água', 'Conta de Luz', 'Telefone', 'Tarifas Bancárias', 'IPTU da Igreja',
+            'Ajuda ao Departamento (EBI)', 'Visitas Pastorais', 'Poupança para Assembleia de Pastores',
+            'Transferência para o Fundo de Construção', 'Vários',
         ]),
     },
     'Projetos': {
@@ -85,7 +112,7 @@ CATEGORIAS = {
             'Compra de Instrumentos', 'Compra de Materiais de Construção',
             'Compra de Som', 'Manutenção do Prédio', 'Manutenção de Som',
             'Outras Compras para o Templo', 'Outras Saídas de Projetos',
-            'Pagamento de Parcela', 'Mão de Obra',
+            'Pagamento de Parcela', 'Mão de Obra', 'Compra de Utensílios de Limpeza', 'Eventos e Alimentação',
         ]),
     },
     'Envios': {
@@ -97,6 +124,8 @@ CATEGORIAS = {
         'Saída': ['Outros Dízimos'],
     },
 }
+
+ORC_GRUPOS = _orc_grupos()
 
 PAPEIS = {'tesoureiro': 'Tesoureiro(a)', 'pastor': 'Pastor', 'admin': 'Tesouraria Nacional',
           'supervisor': 'Supervisor (consulta)'}
@@ -211,6 +240,13 @@ def init_db():
             if papel == 'admin':
                 conn.execute('UPDATE congregacoes SET ativo=0 WHERE id=?', (c['id'],))
 
+    # Itens com nomes antigos passam para os nomes atuais (não apaga nada)
+    for velho, novo in ITENS_RENOMEADOS.items():
+        conn.execute('UPDATE transacoes SET item=? WHERE item=?', (novo, velho))
+        conn.execute('''UPDATE orcamento SET item=? WHERE item=? AND NOT EXISTS (SELECT 1 FROM orcamento o2
+                        WHERE o2.cong_id=orcamento.cong_id AND o2.tipo=orcamento.tipo AND o2.ano=orcamento.ano AND o2.item=?)''',
+                     (novo, velho, novo))
+
     # Regras e dados da conta nacional
     for chave, valor, vig in R.REGRAS_PADRAO:
         conn.execute('INSERT INTO regras (chave, valor, vigencia) VALUES (?,?,?) ON CONFLICT (chave, vigencia) DO NOTHING',
@@ -228,6 +264,32 @@ def init_db():
                      ('Tesouraria Nacional', adm_user, generate_password_hash(adm_pass)))
     conn.commit()
     conn.close()
+
+
+# Nomes antigos (sistema anterior) -> nomes atuais
+ITENS_RENOMEADOS = {
+    'Contribuição Irmão para pastor assembléia': 'Contribuição de irmão para pastor (assembleia)',
+    'Of. Ação De Graças': 'Of. Ação de Graças', 'Of. Cultos De Quintas': 'Of. Cultos de Quinta',
+    'Of. Cultos De Terças': 'Of. Cultos de Terça', 'Of. Cultos Sábados': 'Of. Cultos de Sábado',
+    'Of. Domingos à Noite': 'Of. Domingo à Noite', 'Of. Domingos E.B.D': 'Of. Domingo E.B.D.',
+    'Of. Na Refam': 'Of. na Refam', 'Oferta de música': 'Oferta de Música', 'Oferta de obra social': 'Oferta de Obra Social',
+    'Parceiros missionários': 'Parceiros Missionários', 'Voto do talento': 'Voto do Talento',
+    'Votos Para Construção': 'Votos para Construção', 'Aluguel de Maq. Construção': 'Aluguel de Máquina de Construção',
+    'Aluguel Salão': 'Aluguel do Salão', 'Atividades legales': 'Atividades Legais', 'AyudaPastorAux': 'Ajuda ao Pastor Auxiliar',
+    'Cafeteria/Restaurante': 'Cafeteria / Restaurante', 'Compra de Materias de Construção': 'Compra de Materiais de Construção',
+    'Compra de Utiles de limpeza': 'Compra de Utensílios de Limpeza', 'Comprar artigos de papelaria': 'Artigos de Papelaria',
+    'Comprar botijão de gás': 'Botijão de Gás', 'Construção E Reforma': 'Construção e Reforma',
+    'Documentação E Escrituras': 'Documentação e Escrituras', 'Eventos E Alimentação': 'Eventos e Alimentação',
+    'Manutenção Coz. Da Igreja': 'Manutenção da Cozinha', 'Manutenção de Predio': 'Manutenção do Prédio',
+    'Manutenção Do Prédio': 'Manutenção do Prédio', 'Materiais P/ Escritório': 'Materiais de Escritório',
+    'Otras Compras pra o Templo': 'Outras Compras para o Templo', 'Otras Saídas de Projetos': 'Outras Saídas de Projetos',
+    'Pago de Parcela': 'Pagamento de Parcela', 'Pago Internet': 'Internet', 'Pago Mão de Obra': 'Mão de Obra',
+    'produtos de limpeza': 'Produtos de Limpeza', 'Projetos da diretoria local': 'Projetos da Diretoria Local',
+    'Serviços Públicos': 'Serviços Públicos (água, luz)', 'Trabalho C/ Crianças': 'Trabalho com Crianças',
+    'Trabalho C/ Damas': 'Trabalho com Damas', 'Trabalho C/ Jovens': 'Trabalho com Jovens', 'Viáticos': 'Viagens',
+    'Viaticos assambleia': 'Viagem para Assembleia', 'Brechós': 'Brechó', 'Outros Entradas de Projetos': 'Outras Entradas de Projetos',
+    'Transferência para o fundo de construção': 'Transferência para o Fundo de Construção',
+}
 
 
 CONTA_NACIONAL_PADRAO = {
@@ -811,7 +873,11 @@ def lancar():
             ultimo = conn.execute('SELECT * FROM transacoes WHERE id=? AND cong_id=?',
                                   (int(request.args['ultimo']), get_cong_id())).fetchone()
     return render_template('lancar.html', cfg=get_cfg(), tipo=tipo, grupos=grupos, meses=MESES, anos=ANOS, formas=FORMAS,
-                           ultimo=ultimo,
+                           ultimo=ultimo, envios_auto={
+                               'liq': ['Dízimo dos Dízimos 10%', 'Nivelação 5% (se houver)', 'Betel 4% (se houver)',
+                                       'Aporte ao fundo local', 'Sustento pastoral'],
+                               'nac': [rot for _, rot, _ in R.LINHAS_NACIONAL],
+                               'reg': [rot for _, rot, _ in R.LINHAS_DISTRITAL]},
                            mes_atual=MESES[hoje.month - 1], ano_atual=hoje.year,
                            livro=request.args.get('livro', ''), item=request.args.get('item', ''))
 
@@ -1439,8 +1505,8 @@ def orcamento():
         reais = {(r['item'], r['tipo']): r['t'] for r in conn.execute(
             '''SELECT item, tipo, SUM(valor) AS t FROM transacoes WHERE cong_id=? AND ano=?
                AND COALESCE(transferencia,0)=0 GROUP BY item, tipo''', (cid, ano_sel)).fetchall()}
-    todos_e = sorted(set(i for l in CATEGORIAS.values() for i in l.get('Entrada', [])))
-    todos_s = sorted(set(i for l in CATEGORIAS.values() for i in l.get('Saída', [])))
+    todos_e = sorted(set(i for _, its in ORC_GRUPOS['Entrada'] for i in its))
+    todos_s = sorted(set(i for _, its in ORC_GRUPOS['Saída'] for i in its))
 
     def comparativo(itens, tipo):
         result = []
@@ -1454,6 +1520,7 @@ def orcamento():
         return result
 
     return render_template('orcamento.html', cfg=cfg, ano_sel=ano_sel, anos=ANOS, categorias=CATEGORIAS, livros=LIVROS,
+                           orc_grupos=ORC_GRUPOS,
                            comparativo_e=comparativo(todos_e, 'Entrada'), comparativo_s=comparativo(todos_s, 'Saída'),
                            orc_map={k: dict(v) for k, v in orc_map.items()})
 

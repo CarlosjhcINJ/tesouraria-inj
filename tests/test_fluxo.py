@@ -344,3 +344,29 @@ def test_cadastro_obrigatorio_livro_excel_e_tutorial(app):
     wb = openpyxl.load_workbook(io.BytesIO(r.data))
     assert wb.sheetnames[:3] == ['Cadastro', 'Lançamentos', 'Caixa local'] and 'Dízimos' in wb.sheetnames and 'Balanço' in wb.sheetnames
     assert 'Ordem do trabalho'.lower() in tes.get('/tutorial').get_data(as_text=True).lower()
+
+
+def test_itens_completos_e_nomes_antigos(app):
+    # itens da planilha de exemplo e do sistema antigo
+    for item in ('Conta de Água', 'Conta de Luz', 'Tarifas Bancárias', 'IPTU da Igreja', 'Visitas Pastorais',
+                 'Poupança para Assembleia de Pastores', 'Transferência para o Fundo de Construção'):
+        assert item in appmod.CATEGORIAS['FundoLocal']['Saída']
+    assert 'Oferta das Crianças' in appmod.CATEGORIAS['FundoLocal']['Entrada']
+    for item in ('Of. Raios De Luz', 'Of. Safras Para Cristo', 'Of. Dia Missionário', 'Of. Damas Miss. Metade Ano',
+                 'Of. Jovens Miss. Fim Ano', 'Of. Distrital', 'Sócio Missionário', 'Fundo de Investimento'):
+        assert item in appmod.CATEGORIAS['Envios']['Entrada']
+    saidas_orc = [i for _, its in appmod.ORC_GRUPOS['Saída'] for i in its]
+    assert 'Envio: Raios de Luz' in saidas_orc and 'Sustento pastoral (§ 66)' in saidas_orc
+    # nome antigo vira o atual
+    with appmod.get_db() as conn:
+        conn.execute("INSERT INTO transacoes (cong_id,livro,tipo,item,valor,mes,ano) VALUES (1,'FundoLocal','Saída','Aluguel Salão',10,'janeiro',2026)")
+    appmod.init_db()
+    with appmod.get_db() as conn:
+        assert not conn.execute("SELECT 1 FROM transacoes WHERE item='Aluguel Salão'").fetchone()
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    tes = entrar(app, 'vr.tesouraria', 'tesoureiro123')
+    pag = tes.get('/lancar?tipo=Saída').get_data(as_text=True)
+    assert 'saídas do livro Envios' in pag and 'Raios de Luz' in pag
+    orc = tes.get('/orcamento?ano=2026').get_data(as_text=True)
+    assert 'Liquidação dos dízimos' in orc and 'Envio: Safras para Cristo' in orc

@@ -38,8 +38,9 @@
   <div id="livros">
     <p class="text-muted mb-2">Em qual <b>livro</b> vai esta {{ tipo | lower }}?</p>
     <div class="row g-3 mb-3">
+      {% set ncol = grupos|length + (1 if tipo == 'Saída' else 0) %}
       {% for g in grupos %}
-      <div class="col-md-{{ 12 // grupos|length }}">
+      <div class="col-md-{{ 12 // ncol }}">
         <button type="button" class="livro-escolha w-100 h-100" data-livro="{{ g.livro }}">
           <i class="bi {{ icones[g.livro] }}"></i>
           <b>{{ g.rotulo }}</b>
@@ -47,6 +48,15 @@
         </button>
       </div>
       {% endfor %}
+      {% if tipo == 'Saída' %}
+      <div class="col-md-{{ 12 // ncol }}">
+        <button type="button" class="livro-escolha w-100 h-100" data-livro="Envios">
+          <i class="bi bi-send"></i>
+          <b>Envios</b>
+          <small>Raios de Luz, Safras, Oferta missionária, Dorcas, Conquistadores, distritais…</small>
+        </button>
+      </div>
+      {% endif %}
     </div>
     {% if tipo == 'Entrada' %}
     <p class="small text-muted">Dízimos têm tela própria, que faz a liquidação sozinha: <a href="{{ url_for('dizimos') }}">Registrar dízimos</a>.</p>
@@ -68,6 +78,26 @@
     </div>
   </div>
   {% endfor %}
+
+  {% if tipo == 'Saída' %}
+  <div class="form-card mb-3 itens-livro" data-livro="Envios" hidden>
+    <div class="d-flex justify-content-between align-items-center mb-2">
+      <span class="badge-livro"><i class="bi bi-send me-1"></i>Livro: Envios</span>
+      <button type="button" class="btn btn-sm btn-link voltar-livros">Trocar o livro</button>
+    </div>
+    <p class="mb-2">As <b>saídas do livro Envios</b> não se digitam uma por uma: o sistema lança todas sozinho quando você
+      <b>fecha o mês</b>, com o valor exato que entrou de cada oferta e o cálculo dos dízimos. Assim não há erro nem lançamento em dobro.</p>
+    <div class="row small g-1 mb-3">
+      <div class="col-md-6"><b>Liquidação dos dízimos</b><ul class="mb-0">{% for it in envios_auto.liq %}<li>{{ it }}</li>{% endfor %}</ul></div>
+      <div class="col-md-6"><b>Envio nacional</b><ul class="mb-1">{% for it in envios_auto.nac %}<li>{{ it }}</li>{% endfor %}</ul>
+        <b>Envio regional</b><ul class="mb-0">{% for it in envios_auto.reg %}<li>{{ it }}</li>{% endfor %}</ul></div>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+      <a href="{{ url_for('lancar', tipo='Entrada', livro='Envios') }}" class="btn btn-sm btn-success"><i class="bi bi-arrow-down-circle me-1"></i>Registrar a ENTRADA de uma oferta de envio</a>
+      <a href="{{ url_for('fechamento') }}" class="btn btn-sm btn-outline-primary"><i class="bi bi-lock me-1"></i>Ir para Fechar o mês</a>
+    </div>
+  </div>
+  {% endif %}
 
   <!-- Passo C: valor -->
   <div id="formulario" class="form-card" hidden>

@@ -468,3 +468,20 @@ def test_privacidade_isolamento_e_inatividade(app):
     r = outro.get('/')
     assert r.status_code == 302 and '/login' in r.headers['Location']
     assert outro.get('/').headers['Location'].endswith('/login') or '/login' in outro.get('/').headers['Location']
+
+
+def test_nacional_confirma_configuracao(app):
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    adm = entrar(app, 'nacional', 'senha-forte-123')
+    r = adm.post('/admin/nova', data={'nome': 'Bispo Teste', 'tes_nome': 'Ana Bispo', 'tes_usuario': 'bt.tes', 'tes_senha': 'tesoureiro123'})
+    adm.get(r.headers['Location'])
+    assert 'Calcular, salvar e confirmar' in adm.get('/configuracoes').get_data(as_text=True)
+    ano = date.today().year
+    adm.post('/configuracoes', data={'acao': 'dados', 'nome_congregacao': 'Bispo Teste', 'nome_pastor': 'Bispo Carlos',
+                                     'nome_tesoureiro': 'Ana Bispo', 'ano_atual': ano, 'saldo_ano_anterior': '0'})
+    adm.post('/configuracoes', data={'acao': 'porcentagens', 'ano': ano})
+    with appmod.get_db() as conn:
+        c = conn.execute("SELECT c.* FROM compromissos c JOIN congregacoes g ON g.id=c.cong_id WHERE g.nome='Bispo Teste'").fetchone()
+        assert c['confirmado_em']
+    assert entrar(app, 'bt.tes', 'tesoureiro123').get('/lancar?tipo=Entrada').status_code == 200

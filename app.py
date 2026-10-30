@@ -1700,8 +1700,9 @@ def configuracoes():
                 conn.execute('INSERT INTO config (cong_id, key, value) VALUES (?,?,?) '
                              'ON CONFLICT (cong_id, key) DO UPDATE SET value=excluded.value',
                              (cid, f'base_carta_{ano}', json.dumps(vals)))
-                obs = 'Ajustada pela Tesouraria Nacional' if papel == 'admin' else 'Calculada pelo cadastro da congregação'
-                conf_por = session['user_id'] if tem_papel('pastor') else None
+                obs = 'Confirmada pela Tesouraria Nacional' if papel == 'admin' else 'Calculada pelo cadastro da congregação'
+                # o pastor confirma; a Tesouraria Nacional (autoridade maior) também confirma ao salvar
+                conf_por = session['user_id'] if (tem_papel('pastor') or papel == 'admin') else None
                 conn.execute('''INSERT INTO compromissos (cong_id, ano, categoria, nivelacao, fundo_local_pct, betel, media, meses,
                                 salario_minimo, observacao, emitido_por, emitido_em, confirmado_por, confirmado_em)
                                 VALUES (?,?,?,?,?,?,?,?,?,?,?,CURRENT_TIMESTAMP,?,?)

@@ -1889,8 +1889,10 @@ def _novo_usuario(conn, cid, nome, usuario, senha, papel):
         raise ValueError('Usuário: use letras minúsculas, números, ponto, - ou _.')
     if len(senha) < 8:
         raise ValueError('A senha precisa ter pelo menos 8 caracteres.')
-    if conn.execute('SELECT 1 FROM usuarios WHERE usuario=?', (usuario,)).fetchone():
-        raise ValueError(f'O usuário "{usuario}" já existe.')
+    dono = conn.execute('SELECT nome, papel FROM usuarios WHERE usuario=?', (usuario,)).fetchone()
+    if dono:
+        raise ValueError(f'O usuário "{usuario}" já é usado por {dono["nome"]} ({PAPEIS.get(dono["papel"], dono["papel"])}). '
+                         'Escolha outro nome de usuário, ou troque o nome do usuário existente em Congregações e usuários (botão do lápis).')
     return conn.insert('INSERT INTO usuarios (cong_id, nome, usuario, senha_hash, papel) VALUES (?,?,?,?,?)',
                        (cid, nome.strip()[:120] or usuario, usuario, generate_password_hash(senha), papel))
 
@@ -1934,8 +1936,8 @@ def admin_nova_cong():
                     _novo_usuario(conn, cid, request.form.get('pas_nome', ''), request.form['pas_usuario'],
                                   request.form['pas_senha'], 'pastor')
                 auditar(conn, 'admin.nova_congregacao', nome, cong_id=cid)
-            flash(f'Congregação "{nome}" criada.', 'success')
-            return redirect(url_for('admin'))
+            flash(f'Congregação "{nome}" criada. Agora faça o cadastro dela (nomes e dízimos do ano anterior).', 'success')
+            return redirect(url_for('ver_congregacao', cid=cid))
         except ValueError as e:
             flash(str(e), 'danger')
     return render_template('admin_nova.html', cfg=get_cfg())
@@ -1975,6 +1977,33 @@ def admin_reset_senha(uid):
         conn.execute('UPDATE usuarios SET senha_hash=? WHERE id=?', (generate_password_hash(nova), uid))
         auditar(conn, 'admin.reset_senha', f'Usuário #{uid}', cong_id=0)
     flash('Senha redefinida.', 'success')
+    return redirect(url_for('admin'))
+
+
+@app.route('/admin/usuario/<int:uid>/editar', methods=['POST'])
+@papel_required('admin')
+def admin_editar_usuario(uid):
+    nome = request.form.get('nome', '').strip()[:120]
+    usuario = request.form.get('usuario', '').strip().lower()
+    if not nome or not usuario or not all(ch.isalnum() or ch in '-_.' for ch in usuario):
+        flash('Informe o nome e um usuário com letras minúsculas, números, ponto, - ou _.', 'danger')
+        return redirect(url_for('admin'))
+    with get_db() as conn:
+        u = conn.execute('SELECT * FROM usuarios WHERE id=?', (uid,)).fetchone()
+        if not u:
+            abort(404)
+        outro = conn.execute('SELECT nome FROM usuarios WHERE usuario=? AND id<>?', (usuario, uid)).fetchone()
+        if outro:
+            flash(f'O usuário "{usuario}" já é usado por {outro["nome"]}.', 'danger')
+            return redirect(url_for('admin'))
+        conn.execute('UPDATE usuarios SET nome=?, usuario=? WHERE id=?', (nome, usuario, uid))
+        auditar(conn, 'admin.editar_usuario', f'Usuário #{uid}', antes={'nome': u['nome'], 'usuario': u['usuario']},
+                depois={'nome': nome, 'usuario': usuario}, cong_id=u['cong_id'] or 0)
+    if uid == session.get('user_id'):
+        session['user_nome'], session['usuario'] = nome, usuario
+        flash(f'Seu usuário agora é "{usuario}". Use-o no próximo acesso.', 'success')
+    else:
+        flash(f'Usuário atualizado: {nome} ({usuario}).', 'success')
     return redirect(url_for('admin'))
 
 

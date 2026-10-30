@@ -16,6 +16,14 @@
   </form>
 </div>
 
+{% if not linhas %}
+<a href="{{ url_for('admin_nova_cong') }}" class="guia guia-entrada guia-grande mb-4">
+  <i class="bi bi-building-add text-success"></i>
+  <span class="guia-txt"><b>Comece aqui: cadastre a primeira congregação</b>
+    <small>Ainda não há congregações no sistema. Cadastre a congregação com o tesoureiro e o pastor; em seguida o sistema abre a tesouraria local dela, começando pelo cadastro.</small></span>
+  <i class="bi bi-chevron-right"></i>
+</a>
+{% endif %}
 {% set graves = linhas | selectattr('atrasados', 'gt', 2) | list %}
 <div class="row g-3 mb-4">
   <div class="col-6 col-lg-3"><div class="stat-card entrada"><div class="stat-label">Enviado no ano</div><div class="stat-value" style="font-size:1.15rem">{{ total_ano | brl }}</div></div></div>
@@ -41,7 +49,7 @@
       <tbody>
         {% for l in linhas %}
         <tr>
-          <td class="fw-semibold">{{ l.c['nome'] }}</td>
+          <td class="fw-semibold"><a href="{{ url_for('ver_congregacao', cid=l.c['id']) }}" title="Abrir a tesouraria desta congregação">{{ l.c['nome'] }}</a></td>
           <td class="small">
             {% if l.comp %}<a href="{{ url_for('nacional_carta_ver', cid=l.c['id'], ano=ano) }}">{{ CATEGORIAS_CONG[l.comp['categoria']] }}</a>
               {% if not l.comp['confirmado_em'] %}<span class="text-warning-emphasis d-block">não confirmada</span>{% endif %}

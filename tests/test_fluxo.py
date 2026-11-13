@@ -597,3 +597,19 @@ def test_entrada_dinheiro_e_pix(app):
         rows = conn.execute("SELECT forma, valor FROM transacoes t JOIN congregacoes c ON c.id=t.cong_id "
                             "WHERE c.nome='Um Botão/SP' AND t.item='Outras Ofertas' ORDER BY t.id").fetchall()
     assert [(r['forma'], r['valor']) for r in rows] == [('Dinheiro', 180.0), ('Pix', 120.0)]
+
+
+def test_acesso_arquivado_explica_o_caminho(app):
+    adm = entrar(app, 'nacional', 'senha-forte-123')
+    adm.post('/admin/nova', data={'nome': 'Teste Arquivo/SP', 'tes_nome': 'Tes Arq', 'tes_usuario': 'tesarq',
+                                  'tes_senha': 'senha-arq-123', 'pas_nome': '', 'pas_usuario': '', 'pas_senha': ''})
+    with appmod.get_db() as conn:
+        c = conn.execute("SELECT id FROM congregacoes WHERE nome='Teste Arquivo/SP'").fetchone()
+    assert c, 'congregação de teste não criada'
+    entrar(app, 'tesarq', 'senha-arq-123')
+    adm.post(f"/admin/congregacao/{c['id']}/arquivar")
+    cli = app.test_client()
+    r = cli.post('/login', data={'usuario': 'tesarq', 'senha': 'senha-arq-123'}).get_data(as_text=True)
+    assert 'período de teste' in r
+    r = cli.post('/login', data={'usuario': 'tesarq', 'senha': 'errada-000'}).get_data(as_text=True)
+    assert 'incorretos' in r and 'período de teste' not in r

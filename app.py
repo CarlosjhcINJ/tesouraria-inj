@@ -263,6 +263,20 @@ def init_db():
         conn.execute("INSERT INTO usuarios (cong_id, nome, usuario, senha_hash, papel) VALUES (NULL,?,?,?,'admin') "
                      "ON CONFLICT (usuario) DO NOTHING",
                      ('Tesouraria Nacional', adm_user, generate_password_hash(adm_pass)))
+    # Recuperação de acesso: com ADMIN_RESETAR=SIM no servidor, o admin volta a ter a senha de ADMIN_SENHA
+    # (e o bloqueio por tentativas é limpo). Depois de entrar, apague ADMIN_RESETAR no Render.
+    if os.environ.get('ADMIN_RESETAR', '').strip().upper() == 'SIM' and len(adm_pass) >= 8:
+        alvo = conn.execute('SELECT id, papel FROM usuarios WHERE usuario=?', (adm_user,)).fetchone()
+        if alvo and alvo['papel'] == 'admin':
+            conn.execute('UPDATE usuarios SET senha_hash=?, ativo=1 WHERE id=?',
+                         (generate_password_hash(adm_pass), alvo['id']))
+        elif not alvo:
+            conn.execute("INSERT INTO usuarios (cong_id, nome, usuario, senha_hash, papel) VALUES (NULL,?,?,?,'admin')",
+                         ('Tesouraria Nacional', adm_user, generate_password_hash(adm_pass)))
+        else:
+            print(f'ADMIN_RESETAR: o usuário "{adm_user}" existe mas não é admin; nada foi alterado.')
+        conn.execute('DELETE FROM login_falhas WHERE chave LIKE ?', (adm_user + '|%',))
+        print(f'ADMIN_RESETAR: acesso do usuário "{adm_user}" restaurado. Apague ADMIN_RESETAR no Render.')
     conn.commit()
     conn.close()
 

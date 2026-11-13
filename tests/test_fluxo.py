@@ -485,3 +485,21 @@ def test_nacional_confirma_configuracao(app):
         c = conn.execute("SELECT c.* FROM compromissos c JOIN congregacoes g ON g.id=c.cong_id WHERE g.nome='Bispo Teste'").fetchone()
         assert c['confirmado_em']
     assert entrar(app, 'bt.tes', 'tesoureiro123').get('/lancar?tipo=Entrada').status_code == 200
+
+
+def test_recuperar_admin(app):
+    """ADMIN_RESETAR=SIM devolve ao admin a senha de ADMIN_SENHA e limpa o bloqueio."""
+    from werkzeug.security import generate_password_hash
+    with appmod.get_db() as conn:
+        conn.execute("UPDATE usuarios SET senha_hash=? WHERE usuario='nacional'", (generate_password_hash('outra-senha-999'),))
+    c = app.test_client()
+    for _ in range(5):
+        c.post('/login', data={'usuario': 'nacional', 'senha': 'errada'})
+    r = c.post('/login', data={'usuario': 'nacional', 'senha': 'senha-forte-123'})
+    assert r.status_code == 200  # bloqueado / senha antiga não vale
+    os.environ['ADMIN_RESETAR'] = 'SIM'
+    try:
+        appmod.init_db()
+    finally:
+        os.environ.pop('ADMIN_RESETAR')
+    entrar(app, 'nacional', 'senha-forte-123')

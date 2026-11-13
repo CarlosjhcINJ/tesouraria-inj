@@ -487,8 +487,6 @@ def cadastro_falta(conn, cid, ano, cfg=None):
     comp = conn.execute('SELECT confirmado_em FROM compromissos WHERE cong_id=? AND ano=?', (cid, ano)).fetchone()
     if not comp:
         falta.append(f'os dízimos do ano anterior (para definir a classificação e a liquidação de {ano})')
-    elif not comp['confirmado_em']:
-        falta.append(f'a confirmação do pastor na configuração de {ano}')
     return falta
 
 
@@ -1678,8 +1676,10 @@ def configuracoes():
         if not pode:
             abort(403)
         acao = request.form.get('acao')
+        if acao not in ('dados', 'porcentagens', 'cadastro'):
+            abort(400)
         with get_db() as conn:
-            if acao == 'dados':
+            if acao in ('dados', 'cadastro'):
                 dados = {k: request.form.get(k, '').strip()[:200] for k in
                          ['nome_congregacao', 'nome_pastor', 'nome_tesoureiro', 'nome_auxiliar', 'endereco',
                           'ano_atual', 'saldo_ano_anterior']}
@@ -1695,13 +1695,18 @@ def configuracoes():
                     conn.execute('UPDATE congregacoes SET nome=? WHERE id=?', (dados['nome_congregacao'], cid))
                     session['cong_nome'] = dados['nome_congregacao']
                 auditar(conn, 'config.salvar', 'Responsáveis e dados da congregação', antes=antes, depois=dados)
-                flash('Dados salvos. Os nomes já saem nos livros, recibos e no relatório dos envios.', 'success')
-            elif acao == 'porcentagens':
-                atual = conn.execute('SELECT * FROM compromissos WHERE cong_id=? AND ano=?', (cid, ano)).fetchone()
-                if atual and atual['confirmado_em'] and papel != 'admin':
-                    flash(f'As porcentagens de {ano} já foram confirmadas pelo pastor. '
-                          'Para mudar, fale com a Tesouraria Nacional.', 'danger')
-                    return redirect(url_for('configuracoes', ano=ano))
+                if acao == 'dados':
+                    flash('Dados salvos. Os nomes já saem nos livros, recibos e no relatório dos envios.', 'success')
+            atual = conn.execute('SELECT * FROM compromissos WHERE cong_id=? AND ano=?', (cid, ano)).fetchone()
+            travado_post = bool(atual and atual['confirmado_em']) and papel != 'admin'
+            if acao == 'porcentagens' and travado_post:
+                flash(f'As porcentagens de {ano} já foram confirmadas pelo pastor. '
+                      'Para mudar, fale com a Tesouraria Nacional.', 'danger')
+                return redirect(url_for('configuracoes', ano=ano))
+            if acao == 'cadastro' and travado_post:
+                flash('Cadastro salvo. As porcentagens do ano já estavam confirmadas e não mudaram. '
+                      'Os lançamentos estão liberados.', 'success')
+            elif acao in ('porcentagens', 'cadastro'):
                 vals = []
                 for i in range(12):
                     try:
@@ -1730,11 +1735,10 @@ def configuracoes():
                               conf_por, datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S') if conf_por else None))
                 auditar(conn, 'porcentagens.calcular', f'Classificação e liquidação {ano}',
                         antes=dict(atual) if atual else None, depois={k: p[k] for k in ('categoria', 'media', 'meses', 'nivelacao', 'fundo_local_pct', 'betel')})
-                flash(f'{ano}: {R.CATEGORIAS[p["categoria"]]}, fundo local {p["fundo_local_pct"]}%'
+                flash(('Cadastro salvo. ' if acao == 'cadastro' else '') +
+                      f'{ano}: {R.CATEGORIAS[p["categoria"]]}, fundo local {p["fundo_local_pct"]}%'
                       f'{", com nivelação" if p["nivelacao"] else ""}{", com Betel" if p["betel"] else ""}.'
-                      + ('' if conf_por else ' Falta o pastor confirmar.'), 'success')
-            else:
-                abort(400)
+                      ' Os lançamentos estão liberados.', 'success')
         return redirect(url_for('configuracoes', ano=ano))
 
     janela = R.janela_carta(ano)

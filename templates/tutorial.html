@@ -8,13 +8,15 @@
 {% set secoes = [
   ('s0', 'bi-box-arrow-in-right', 'Entrar no sistema', 'Endereço, usuário e senha', [
     ('Abra o sistema', 'No celular ou no computador, acesse <b>tesouraria-inj.onrender.com</b>. Se o sistema estiver “dormindo”, o primeiro acesso leva cerca de 1 minuto.'),
-    ('Entre com seu usuário', 'Use o usuário e a senha que a Tesouraria Nacional entregou. Cada pessoa tem o seu: o tesoureiro lança, o pastor confere e aprova.'),
-    ('Troque a senha', 'No primeiro acesso, vá em <b>Minha conta</b> e troque a senha. Não compartilhe a senha com ninguém.'),
+    ('Crie o seu acesso', 'O <b>pastor</b> abre o link que a Tesouraria Nacional mandou no grupo, cadastra a congregação e cria o acesso com o próprio e-mail (se também for o tesoureiro, marca a opção). O <b>tesoureiro</b> entra pelo link de convite que o pastor manda, na tela do cadastro.'),
+    ('Entre com seu e-mail', 'Nas próximas vezes, entre com o seu e-mail e a sua senha. Cada pessoa tem o seu acesso: o tesoureiro lança e o pastor acompanha.'),
+    ('Senha', 'Para trocar, vá em <b>Minha conta</b>. Não compartilhe a senha com ninguém. Esqueceu? Peça à Tesouraria Nacional para redefinir.'),
   ], ('warning', 'Depois de 5 senhas erradas, o acesso fica bloqueado por 15 minutos.')),
   ('sn', 'bi-building', 'Tesouraria Nacional: a ordem do trabalho', 'Para quem administra o sistema', [
-    ('Congregações e usuários', 'Cadastre cada congregação com o tesoureiro e o pastor. Se o pastor também for o tesoureiro, ligue <b>O pastor também é o tesoureiro</b> e crie um só usuário. Ao salvar, o sistema abre a tesouraria da congregação.'),
+    ('Link dos pastores', 'Em <b>Congregações e usuários</b>, mande o link do quadro verde no grupo dos pastores (botão do WhatsApp). Cada pastor cadastra a congregação e o próprio acesso; você acompanha a lista e desativa quem não for da região. Se o link vazar, gere um código novo.'),
+    ('Congregações de teste', 'Use <b>Arquivar</b> para guardar uma congregação de teste e liberar o nome real, ou <b>Arquivar todas</b> para começar do zero.'),
     ('Regras e conta', 'Confira o salário mínimo vigente, os percentuais e os dados da conta nacional. Mude só quando o Regulamento ou o salário mínimo mudar, informando a data de início.'),
-    ('Cartas anuais', 'Em novembro, emita as cartas do ano seguinte. A classificação também pode ser calculada pela congregação no cadastro; o pastor confirma.'),
+    ('Cartas anuais', 'Em novembro, emita as cartas do ano seguinte. A classificação também pode ser calculada pela própria congregação no cadastro.'),
     ('Envios das congregações', 'Todo mês, a partir do dia 5, confira quem enviou, abra o relatório e o comprovante e marque como recebido.'),
     ('Abrir uma congregação', 'No menu, em <b>Abrir uma congregação</b>, escolha a congregação para ver e ajudar a tesouraria local dela.'),
   ], ('info', 'Ao entrar, a nacional vê a página Início da nacional com estes passos numerados e a situação de cada um.')),
@@ -35,6 +37,7 @@
     ('Escolha o livro', 'Todo lançamento pertence a um livro: <b>Caixa local</b> (ofertas e despesas do dia a dia), <b>Projetos</b> (cantina, brechó, construção) ou <b>Envios</b> (ofertas que vão para a nacional: missionária, Raios de Luz, Safras, distritais).'),
     ('Escolha o tipo', 'Aparecem só os tipos daquele livro. Exemplo: Caixa local → Saída → Aluguel do Salão.'),
     ('Valor, data e nome', 'Digite o valor, a data, a forma (dinheiro, Pix, banco) e o nome de quem entregou ou de quem recebeu. O nome sai no recibo.'),
+    ('Parte em dinheiro, parte em Pix', 'Na entrada, escolha a forma <b>Dinheiro + Pix</b> e informe quanto foi em Pix. O sistema grava as duas partes separadas, para bater com o caixa e com o banco.'),
     ('Comprovante', 'Em toda <b>saída</b>, anexe a foto do recibo ou da nota (§ 95). No celular, dá para tirar a foto na hora.'),
     ('Imprima o recibo', 'Depois de registrar, aparece o botão <b>Imprimir recibo</b>: sai em duas vias, com o valor por extenso e as assinaturas.'),
   ], ('warning', 'Mês fechado não aceita lançamento. Para corrigir, o pastor precisa reabrir o mês (fica registrado no histórico).')),
@@ -50,9 +53,8 @@
   ], None),
   ('s6', 'bi-lock', 'Fechar o mês e relatório dos envios', 'No começo do mês seguinte, até o dia 5', [
     ('Fechar', 'Em <b>Fechar o mês</b>, confira o cálculo dos envios e clique em fechar. O sistema lança sozinho as saídas da liquidação e dos envios.'),
-    ('Pastor aprova', 'O pastor entra e aprova o fechamento.'),
-    ('Deposite e anexe', 'Faça o depósito na conta nacional e anexe o comprovante do banco no fechamento.'),
-    ('Relatório', 'Imprima o <b>relatório dos envios</b> com os nomes do pastor e do tesoureiro. A nacional confere e marca como recebido.'),
+    ('Deposite e anexe', 'Logo depois de fechar, faça o depósito na conta nacional e anexe o comprovante na mesma tela. Não precisa esperar aprovação.'),
+    ('Pronto, sem WhatsApp', 'Ao anexar o comprovante, a Tesouraria Nacional já recebe o relatório dos envios e o comprovante no sistema, confere e marca como recebido. Se quiser, imprima o relatório para o arquivo da igreja.'),
   ], None),
   ('s7', 'bi-printer', 'Imprimir livros, balanço e recibos', 'Tudo sai com a logo e os nomes dos responsáveis', [
     ('Página Imprimir', 'No menu, clique em <b>Imprimir</b>. Escolha o mês e o ano.'),

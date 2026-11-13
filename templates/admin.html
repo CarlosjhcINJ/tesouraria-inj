@@ -65,6 +65,16 @@
   </div>
 </div>
 
+<details class="form-card mb-4" style="border-left:6px solid #dc3545">
+  <summary class="fw-bold" style="cursor:pointer"><i class="bi bi-archive me-1 text-danger"></i>Começar do zero: arquivar todas as congregações de teste</summary>
+  <p class="small text-muted mt-2 mb-2">Guarda todas as congregações ativas como "(teste)", desativa os usuários delas e libera os nomes.
+    Depois, cada pastor se cadastra de novo pelo link acima. Nada é apagado: as de teste ficam na lista, inativas.</p>
+  <form method="POST" action="{{ url_for('admin_arquivar_todas') }}" class="d-flex flex-wrap gap-2 align-items-center">
+    <input type="text" name="confirmar" class="form-control form-control-sm" style="max-width:220px" placeholder="Digite ARQUIVAR" autocomplete="off"/>
+    <button class="btn btn-danger btn-sm"><i class="bi bi-archive me-1"></i>Arquivar todas</button>
+  </form>
+</details>
+
 <div class="row g-4">
   <div class="col-lg-8">
     {% for c in congs %}
@@ -72,9 +82,16 @@
       <div class="d-flex justify-content-between align-items-center mb-2">
         <div class="fw-bold">{{ c['nome'] }} {% if not c['ativo'] %}<span class="badge bg-secondary">inativa</span>{% endif %}
           {% if c['ativo'] %}<a href="{{ url_for('ver_congregacao', cid=c['id']) }}" class="btn btn-sm btn-success ms-2"><i class="bi bi-box-arrow-in-right me-1"></i>Abrir tesouraria</a>{% endif %}</div>
+        <div class="d-flex gap-1">
+        {% if c['ativo'] %}
+        <form method="POST" action="{{ url_for('admin_arquivar_cong', cid=c['id']) }}" onsubmit="return confirm('Arquivar {{ c['nome'] }}? Ela e os usuários dela deixam de entrar e o nome fica livre para o pastor se cadastrar de novo.')">
+          <button class="btn btn-sm btn-outline-danger" title="Guardar como teste e liberar o nome"><i class="bi bi-archive me-1"></i>Arquivar</button>
+        </form>
+        {% endif %}
         <form method="POST" action="{{ url_for('admin_toggle_cong', cid=c['id']) }}">
           <button class="btn btn-sm btn-outline-secondary">{{ 'Desativar' if c['ativo'] else 'Ativar' }}</button>
         </form>
+        </div>
       </div>
       {% for u in por_cong.get(c['id'], []) %}{{ linha_usuario(u) }}{% else %}<div class="small text-muted">Sem usuários.</div>{% endfor %}
     </div>

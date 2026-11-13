@@ -2305,6 +2305,43 @@ def admin_toggle_cong(cid):
     return redirect(url_for('admin'))
 
 
+def _arquivar(conn, c):
+    """Guarda a congregação de teste: muda o nome (libera o nome real), desativa ela e os usuários."""
+    marca = ' (teste ' + date.today().strftime('%d/%m/%Y') + ')'
+    nome = c['nome'] if '(teste ' in c['nome'] else (c['nome'] + marca)[:160]
+    conn.execute('UPDATE congregacoes SET nome=?, ativo=0 WHERE id=?', (nome, c['id']))
+    conn.execute("UPDATE config SET value=? WHERE cong_id=? AND key='nome_congregacao'", (nome, c['id']))
+    conn.execute("DELETE FROM config WHERE cong_id=? AND key='convite_token'", (c['id'],))
+    conn.execute('UPDATE usuarios SET ativo=0 WHERE cong_id=?', (c['id'],))
+    auditar(conn, 'admin.arquivar_congregacao', nome, cong_id=c['id'])
+
+
+@app.route('/admin/congregacao/<int:cid>/arquivar', methods=['POST'])
+@papel_required('admin')
+def admin_arquivar_cong(cid):
+    with get_db() as conn:
+        c = conn.execute('SELECT * FROM congregacoes WHERE id=?', (cid,)).fetchone()
+        if not c:
+            abort(404)
+        _arquivar(conn, c)
+    flash(f'"{c["nome"]}" foi arquivada. O nome está livre: o pastor pode se cadastrar de novo pelo link.', 'success')
+    return redirect(url_for('admin'))
+
+
+@app.route('/admin/arquivar-todas', methods=['POST'])
+@papel_required('admin')
+def admin_arquivar_todas():
+    if request.form.get('confirmar', '').strip().upper() != 'ARQUIVAR':
+        flash('Para arquivar todas, digite ARQUIVAR na caixa de confirmação.', 'warning')
+        return redirect(url_for('admin'))
+    with get_db() as conn:
+        congs = conn.execute('SELECT * FROM congregacoes WHERE ativo=1').fetchall()
+        for c in congs:
+            _arquivar(conn, c)
+    flash(f'{len(congs)} congregações arquivadas. Agora mande o link dos pastores: cada um se cadastra de novo.', 'success')
+    return redirect(url_for('admin'))
+
+
 # ═════════════════════════════════════════════
 #  EXPORTAR EXCEL
 # ═════════════════════════════════════════════

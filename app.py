@@ -136,7 +136,7 @@ STATUS_FECH = {
     'fechado': ('Aguardando aprovação do pastor', 'warning'),
     'aprovado': ('Aguardando comprovante', 'info'),
     'enviado': ('Enviado · mês travado', 'primary'),
-    'recebido': ('Recebido pela nacional', 'success'),
+    'recebido': ('Aprovado pela nacional', 'success'),
 }
 
 # ═════════════════════════════════════════════
@@ -1539,11 +1539,13 @@ def fechamento():
         else:
             calc, reg = calcular_mes(conn, cid, ano, mes)
         comp = compromisso_de(conn, cid, ano)
+        dev = conn.execute('SELECT value FROM config WHERE cong_id=? AND key=?', (cid, f'devolvido_{ano}_{mes}')).fetchone()
+        devolucao = json.loads(dev['value']) if dev and not f else None
         status_ano = {r['mes']: r['status'] for r in
                       conn.execute('SELECT mes, status FROM fechamentos WHERE cong_id=? AND ano=?', (cid, ano)).fetchall()}
     limite = R.prazo_envio(ano, mes, int(reg.get('prazo_dia', 5)))
     return render_template('fechamento.html', cfg=cfg, ano=ano, mes=mes, anos=ANOS, f=f, calc=calc, comp=comp,
-                           limite=limite, status_ano=status_ano, nacional=config_nacional())
+                           limite=limite, status_ano=status_ano, nacional=config_nacional(), devolucao=devolucao)
 
 
 @app.route('/fechamento/fechar', methods=['POST'])
@@ -1563,6 +1565,7 @@ def fechamento_fechar():
         fid = conn.insert('INSERT INTO fechamentos (cong_id, ano, mes, status, calculo, total, fechado_por) VALUES (?,?,?,?,?,?,?)',
                           (cid, ano, mes, 'aprovado', json.dumps(calc, ensure_ascii=False), calc['total'], session['user_id']))
         conn.execute('UPDATE fechamentos SET aprovado_por=?, aprovado_em=CURRENT_TIMESTAMP WHERE id=?', (session['user_id'], fid))
+        conn.execute('DELETE FROM config WHERE cong_id=? AND key=?', (cid, f'devolvido_{ano}_{mes}'))
         auditar(conn, 'fechamento.fechar', f'{MESES[mes - 1]}/{ano}', depois={'total': calc['total']})
     flash('Mês fechado. Agora deposite o valor e anexe o comprovante aqui mesmo: a Tesouraria Nacional recebe na hora, '
           'sem precisar mandar por WhatsApp.', 'success')
@@ -2040,8 +2043,166 @@ def nacional_receber(fid):
         conn.execute("UPDATE fechamentos SET status='recebido', recebido_por=?, recebido_em=CURRENT_TIMESTAMP WHERE id=?",
                      (session['user_id'], fid))
         auditar(conn, 'nacional.receber', f"{MESES[f['mes'] - 1]}/{f['ano']}", cong_id=f['cong_id'])
-    flash('Recebimento confirmado.', 'success')
-    return redirect(request.referrer or url_for('nacional_envios', ano=f['ano']))
+        prox = conn.execute("SELECT id FROM fechamentos WHERE status='enviado' ORDER BY ano, mes, id").fetchone()
+    flash('Aprovado. Os valores já entraram no Livro da nacional, sem relançar nada.', 'success')
+    if request.form.get('seguir') and prox:
+        return redirect(url_for('nacional_conferir', fid=prox['id']))
+    return redirect(url_for('nacional_envios', ano=f['ano']))
+
+
+@app.route('/nacional/conferir/<int:fid>')
+@papel_required('admin', 'supervisor')
+def nacional_conferir(fid):
+    """Tela única para a nacional conferir o envio: relatório, comprovante e dízimos do mês, sem relançar nada."""
+    with get_db() as conn:
+        f = conn.execute('SELECT * FROM fechamentos WHERE id=?', (fid,)).fetchone()
+        if not f:
+            abort(404)
+        cong = conn.execute('SELECT * FROM congregacoes WHERE id=?', (f['cong_id'],)).fetchone()
+        diz = conn.execute('SELECT * FROM dizimos WHERE cong_id=? AND ano=? AND mes=? ORDER BY id',
+                           (f['cong_id'], f['ano'], MESES[f['mes'] - 1])).fetchall()
+        envios = conn.execute("""SELECT * FROM transacoes WHERE cong_id=? AND ano=? AND mes=? AND livro='Envios'
+                                 AND tipo='Entrada' AND origem IS NULL ORDER BY id""",
+                              (f['cong_id'], f['ano'], MESES[f['mes'] - 1])).fetchall()
+        pend = conn.execute("""SELECT f.id, f.ano, f.mes, f.total, g.nome FROM fechamentos f JOIN congregacoes g ON g.id=f.cong_id
+                               WHERE f.status='enviado' ORDER BY f.ano, f.mes, g.nome""").fetchall()
+    proximo = next((p for p in pend if p['id'] != fid), None)
+    return render_template('nacional_conferir.html', cfg=get_cfg(), f=f, calc=json.loads(f['calculo']), cong=cong,
+                           diz=diz, envios=envios, proximo=proximo, n_pend=len(pend))
+
+
+@app.route('/nacional/fechamento/<int:fid>/devolver', methods=['POST'])
+@papel_required('admin')
+def nacional_devolver(fid):
+    """Devolve o envio com o motivo: o mês reabre na congregação, que corrige e envia de novo."""
+    motivo = request.form.get('motivo', '').strip()
+    with get_db() as conn:
+        f = conn.execute('SELECT * FROM fechamentos WHERE id=?', (fid,)).fetchone()
+        if not f or f['status'] not in ('aprovado', 'enviado'):
+            abort(400)
+        if len(motivo) < 5:
+            flash('Escreva o que a congregação precisa corrigir.', 'danger')
+            return redirect(url_for('nacional_conferir', fid=fid))
+        cid, ano, mes = f['cong_id'], f['ano'], f['mes']
+        conn.execute('DELETE FROM transacoes WHERE cong_id=? AND origem=?', (cid, f'fechamento:{fid}'))
+        conn.execute('DELETE FROM fechamentos WHERE id=?', (fid,))
+        aviso = json.dumps({'motivo': motivo, 'por': session.get('user_nome'), 'em': datetime.now().strftime('%d/%m/%Y %H:%M')},
+                           ensure_ascii=False)
+        chave = f'devolvido_{ano}_{mes}'
+        if conn.execute('SELECT 1 FROM config WHERE cong_id=? AND key=?', (cid, chave)).fetchone():
+            conn.execute('UPDATE config SET value=? WHERE cong_id=? AND key=?', (aviso, cid, chave))
+        else:
+            conn.execute('INSERT INTO config (cong_id, key, value) VALUES (?,?,?)', (cid, chave, aviso))
+        antes = {k: v for k, v in f.items() if k != 'comprovante_arquivo'}
+        auditar(conn, 'nacional.devolver', f"{MESES[mes - 1]}/{ano} — motivo: {motivo}", antes=antes, cong_id=cid)
+    flash('Envio devolvido. O mês reabriu na congregação com o seu motivo; quando corrigirem, volta para conferir.', 'warning')
+    return redirect(url_for('nacional_envios', ano=ano))
+
+
+def _livro_nacional(conn, ano):
+    """Entradas da nacional montadas a partir dos envios das congregações (nada é relançado)."""
+    fechs = conn.execute("""SELECT f.id, f.cong_id, f.mes, f.status, f.total, f.calculo, f.comprovante_data, g.nome
+                            FROM fechamentos f JOIN congregacoes g ON g.id=f.cong_id
+                            WHERE f.ano=? AND f.status IN ('enviado', 'recebido') ORDER BY f.mes, g.nome""", (ano,)).fetchall()
+    rotulos, por_linha, por_cong, detalhe = {}, {}, {}, []
+    tot_mes = [0.0] * 12
+    pend_mes = [0.0] * 12
+    for f in fechs:
+        calc = json.loads(f['calculo'])
+        m = f['mes'] - 1
+        if f['status'] != 'recebido':
+            pend_mes[m] += f['total']
+            continue
+        for grupo in ('nacional', 'distrital'):
+            for l in calc[grupo]:
+                k = (grupo, l['chave'])
+                rotulos.setdefault(k, l['rotulo'])
+                por_linha.setdefault(k, [0.0] * 12)[m] += l['valor']
+                if l['valor']:
+                    detalhe.append({'mes': f['mes'], 'cong': f['nome'], 'grupo': grupo, 'rotulo': l['rotulo'],
+                                    'valor': l['valor'], 'deposito': f['comprovante_data'], 'fid': f['id']})
+        por_cong.setdefault(f['nome'], [0.0] * 12)[m] += f['total']
+        tot_mes[m] += f['total']
+    linhas = [{'grupo': g, 'rotulo': rotulos[(g, c)], 'meses': v, 'total': sum(v)}
+              for (g, c), v in por_linha.items() if sum(v)]
+    linhas.sort(key=lambda l: (l['grupo'] != 'nacional', -l['total']))
+    congs = [{'nome': n, 'meses': v, 'total': sum(v)} for n, v in sorted(por_cong.items())]
+    return {'linhas': linhas, 'congs': congs, 'tot_mes': tot_mes, 'total': sum(tot_mes),
+            'pend_mes': pend_mes, 'pendente': sum(pend_mes), 'detalhe': detalhe}
+
+
+@app.route('/nacional/livro')
+@papel_required('admin', 'supervisor')
+def nacional_livro():
+    ano = int(request.args.get('ano', date.today().year))
+    with get_db() as conn:
+        lv = _livro_nacional(conn, ano)
+    return render_template('nacional_livro.html', cfg=get_cfg(), ano=ano, anos=ANOS, lv=lv)
+
+
+@app.route('/nacional/livro.xlsx')
+@papel_required('admin', 'supervisor')
+def nacional_livro_excel():
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+    ano = int(request.args.get('ano', date.today().year))
+    with get_db() as conn:
+        lv = _livro_nacional(conn, ano)
+    NAVY = PatternFill('solid', fgColor='25307A')
+    CLARO = PatternFill('solid', fgColor='E9EEFB')
+    BR, B = Font(color='FFFFFF', bold=True), Font(bold=True)
+    MOEDA = '"R$" #,##0.00;[Red]-"R$" #,##0.00'
+    wb = openpyxl.Workbook()
+
+    def matriz(ws, titulo, cab0, linhas):
+        ws.cell(1, 1, 'IGREJA DO NOME DE JESUS — Tesouraria Nacional').font = Font(bold=True, size=13, color='25307A')
+        ws.cell(2, 1, f'{titulo} — {ano} (só envios com recebimento confirmado)').font = B
+        cols = [cab0] + [m[:3].capitalize() for m in MESES] + ['Total']
+        for ci, c in enumerate(cols, 1):
+            cell = ws.cell(4, ci, c)
+            cell.font, cell.fill = BR, NAVY
+            cell.alignment = Alignment(horizontal='center')
+            ws.column_dimensions[get_column_letter(ci)].width = 38 if ci == 1 else 13
+        r = 5
+        for nome, meses in linhas:
+            ws.cell(r, 1, nome)
+            for i, v in enumerate(meses, 2):
+                ws.cell(r, i, round(v, 2) or None).number_format = MOEDA
+            ws.cell(r, 14, f'=SUM(B{r}:M{r})').number_format = MOEDA
+            r += 1
+        ws.cell(r, 1, 'TOTAL').font = B
+        for ci in range(2, 15):
+            col = get_column_letter(ci)
+            c = ws.cell(r, ci, f'=SUM({col}5:{col}{r - 1})' if r > 5 else 0)
+            c.number_format, c.font, c.fill = MOEDA, B, CLARO
+        ws.cell(r, 1).fill = CLARO
+        ws.freeze_panes = 'B5'
+
+    ws = wb.active
+    ws.title = 'Por linha do relatório'
+    matriz(ws, 'Entradas por linha do Relatório Econômico', 'Linha',
+           [(('' if l['grupo'] == 'nacional' else 'Distrital · ') + l['rotulo'], l['meses']) for l in lv['linhas']])
+    matriz(wb.create_sheet('Por congregação'), 'Entradas por congregação', 'Congregação',
+           [(c['nome'], c['meses']) for c in lv['congs']])
+    ws = wb.create_sheet('Detalhe')
+    for ci, (c, w) in enumerate(zip(['Mês', 'Congregação', 'Destino', 'Linha', 'Valor', 'Data do depósito'],
+                                     [11, 30, 11, 38, 14, 16]), 1):
+        cell = ws.cell(1, ci, c)
+        cell.font, cell.fill = BR, NAVY
+        ws.column_dimensions[get_column_letter(ci)].width = w
+    for r, d in enumerate(lv['detalhe'], 2):
+        for ci, v in enumerate([MESES[d['mes'] - 1].capitalize(), d['cong'], d['grupo'].capitalize(), d['rotulo'],
+                                round(d['valor'], 2), d['deposito'] or ''], 1):
+            ws.cell(r, ci, v)
+        ws.cell(r, 5).number_format = MOEDA
+    ws.auto_filter.ref = f'A1:F{max(2, len(lv["detalhe"]) + 1)}'
+    ws.freeze_panes = 'A2'
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return send_file(buf, as_attachment=True, download_name=f'Livro-Nacional-{ano}.xlsx',
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 @app.route('/nacional/cartas', methods=['GET', 'POST'])

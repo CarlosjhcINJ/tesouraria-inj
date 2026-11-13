@@ -6,7 +6,7 @@
 <div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
   <div>
     <h1 class="page-title">Envios das congregações</h1>
-    <p class="text-muted mb-0 small">Situação de cada mês de {{ ano }}. O prazo de cada envio é o dia 5 do mês seguinte (§ 80). Meses antes do início do uso do sistema aparecem apagados e não contam como atraso.</p>
+    <p class="text-muted mb-0 small">Clique em <b>Conferir</b>: você vê o relatório, o comprovante e os lançamentos e aprova com um clique, sem relançar nada. Situação de cada mês de {{ ano }}. O prazo de cada envio é o dia 5 do mês seguinte (§ 80). Meses antes do início do uso do sistema aparecem apagados e não contam como atraso.</p>
   </div>
   <form class="d-flex gap-2 align-items-center">
     <label class="form-label mb-0 small fw-semibold">Ano:</label>
@@ -61,23 +61,17 @@
                 {% set f = m.f %}
                 {% set cls = (f['status'] if f else '') ~ (' atrasado' if m.atrasado else '') %}
                 {% if f %}
-                <a class="mes-cel {{ cls }}" href="{{ url_for('fechamento_relatorio', fid=f['id']) }}" target="_blank"
+                <a class="mes-cel {{ cls }}" href="{{ url_for('nacional_conferir', fid=f['id']) }}"
                    title="{{ MESES[m.m - 1] | capitalize }}: {{ STATUS_FECH[f['status']][0] }} · {{ f['total'] | brl }}">{{ MESES[m.m - 1][:3] | capitalize }}</a>
                 {% else %}
                 <span class="mes-cel {{ cls }}" {% if m.antes %}style="opacity:.35"{% endif %} title="{{ MESES[m.m - 1] | capitalize }}: {{ 'atrasado' if m.atrasado else ('antes do início do sistema' if m.antes else 'sem fechamento') }}">{{ MESES[m.m - 1][:3] | capitalize }}</span>
                 {% endif %}
               {% endfor %}
             </div>
-            {% if papel == 'admin' %}
-              {% for m in l.meses if m.f and m.f['status'] == 'enviado' %}
-              <form method="POST" action="{{ url_for('nacional_receber', fid=m.f['id']) }}" class="d-inline-block mt-1 me-1">
-                <button class="btn btn-xs btn-outline-success" style="padding:1px 8px; font-size:.7rem" title="Confirmar que o depósito caiu na conta">
-                  Confirmar {{ MESES[m.m - 1][:3] }} · {{ m.f['total'] | brl }}
-                </button>
-                <a href="{{ url_for('fechamento_arquivo', fid=m.f['id']) }}" target="_blank" class="small ms-1" title="Ver comprovante"><i class="bi bi-paperclip"></i></a>
-              </form>
-              {% endfor %}
-            {% endif %}
+            {% for m in l.meses if m.f and m.f['status'] == 'enviado' %}
+              <a href="{{ url_for('nacional_conferir', fid=m.f['id']) }}" class="btn btn-xs btn-outline-success mt-1 me-1" style="padding:1px 8px; font-size:.7rem">
+                Conferir {{ MESES[m.m - 1][:3] }} · {{ m.f['total'] | brl }}</a>
+            {% endfor %}
           </td>
           <td class="text-end">{% if l.atrasados %}<span class="badge {{ 'bg-danger' if l.atrasados > 2 else 'bg-warning text-dark' }}">{{ l.atrasados }}</span>{% else %}<span class="text-muted">—</span>{% endif %}</td>
         </tr>

@@ -51,14 +51,22 @@
 <a href="{{ url_for('nacional_envios') }}" class="guia {{ 'guia-saida' if pendentes and congs else '' }} mb-3">
   <span class="guia-num">4</span>
   <span class="guia-txt"><b><i class="bi bi-inboxes me-1"></i>Envios das congregações (todo mês, a partir do dia 5)</b>
-    <small>{% if congs %}{{ ref_nome | capitalize }}: {{ enviados }} de {{ congs | length }} enviaram{% if a_conferir %} · {{ a_conferir }} para conferir e marcar como recebido{% endif %}{% if pendentes %} · {{ pendentes }} ainda não enviaram{% endif %}.{% else %}Aparece quando houver congregações.{% endif %}</small></span>
+    <small>{% if congs %}{{ ref_nome | capitalize }}: {{ enviados }} de {{ congs | length }} enviaram{% if a_conferir %} · {{ a_conferir }} para conferir e aprovar{% endif %}{% if pendentes %} · {{ pendentes }} ainda não enviaram{% endif %}.{% else %}Aparece quando houver congregações.{% endif %}</small></span>
+  <i class="bi bi-chevron-right"></i>
+</a>
+
+<!-- 5. Livro -->
+<a href="{{ url_for('nacional_livro') }}" class="guia mb-3">
+  <span class="guia-num">5</span>
+  <span class="guia-txt"><b><i class="bi bi-journal-text me-1"></i>Livro da nacional</b>
+    <small>As entradas da nacional, por linha do relatório e por congregação, montadas sozinhas com os envios aprovados. Baixe em Excel.</small></span>
   <i class="bi bi-chevron-right"></i>
 </a>
 
 {% if papel == 'admin' %}
-<!-- 5. Histórico -->
+<!-- 6. Histórico -->
 <a href="{{ url_for('nacional_auditoria') }}" class="guia mb-4">
-  <span class="guia-num">5</span>
+  <span class="guia-num">6</span>
   <span class="guia-txt"><b><i class="bi bi-clock-history me-1"></i>Histórico de alterações</b>
     <small>{{ n_hist }} registro(s): quem alterou ou excluiu o quê, e quando. Use para conferir quando algo não bater.</small></span>
   <i class="bi bi-chevron-right"></i>

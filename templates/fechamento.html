@@ -29,11 +29,18 @@
   {% set ordem = ['aberto','aprovado','enviado','recebido'] %}
   {% set idx = ordem.index('aprovado' if st == 'fechado' else st) %}
   <div class="passos">
-    {% for rotulo in ['1. Lançar no mês','2. Fechar o mês','3. Depósito e comprovante','4. Nacional confirma'] %}
+    {% for rotulo in ['1. Lançar no mês','2. Fechar o mês','3. Depósito e comprovante','4. Nacional aprova'] %}
     <span class="passo {% if loop.index0 < idx %}feito{% elif loop.index0 == idx %}atual{% endif %}">{{ rotulo }}</span>
     {% endfor %}
   </div>
 </div>
+
+{% if devolucao %}
+<div class="alert alert-danger"><i class="bi bi-arrow-return-left me-2"></i><b>A Tesouraria Nacional devolveu este mês para correção</b>
+  ({{ devolucao.por }}, {{ devolucao.em }}):<br>“{{ devolucao.motivo }}”<br>
+  <small>Corrija os lançamentos, feche o mês de novo e anexe o comprovante.</small>
+</div>
+{% endif %}
 
 {% if not comp and not f %}
 <div class="alert alert-warning"><i class="bi bi-exclamation-triangle me-2"></i>

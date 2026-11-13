@@ -38,9 +38,10 @@
     <a href="{{ url_for('nacional_regras') }}" class="nav-item {% if ep == 'nacional_regras' %}active{% endif %}"><i class="bi bi-sliders"></i> 2. Regras e conta</a>
     <a href="{{ url_for('nacional_cartas') }}" class="nav-item {% if ep == 'nacional_cartas' %}active{% endif %}"><i class="bi bi-envelope-paper"></i> 3. Cartas anuais</a>
     {% endif %}
-    <a href="{{ url_for('nacional_envios') }}" class="nav-item {% if ep == 'nacional_envios' %}active{% endif %}"><i class="bi bi-inboxes"></i> 4. Envios das congregações</a>
+    <a href="{{ url_for('nacional_envios') }}" class="nav-item {% if ep in ('nacional_envios','nacional_conferir') %}active{% endif %}"><i class="bi bi-inboxes"></i> 4. Envios das congregações</a>
+    <a href="{{ url_for('nacional_livro') }}" class="nav-item {% if ep == 'nacional_livro' %}active{% endif %}"><i class="bi bi-journal-text"></i> 5. Livro da nacional</a>
     {% if session.get('papel') == 'admin' %}
-    <a href="{{ url_for('nacional_auditoria') }}" class="nav-item {% if ep == 'nacional_auditoria' %}active{% endif %}"><i class="bi bi-clock-history"></i> 5. Histórico de alterações</a>
+    <a href="{{ url_for('nacional_auditoria') }}" class="nav-item {% if ep == 'nacional_auditoria' %}active{% endif %}"><i class="bi bi-clock-history"></i> 6. Histórico de alterações</a>
     {% endif %}
     {% if lista_congregacoes %}
     <div class="nav-section mt-2">ABRIR UMA CONGREGAÇÃO</div>

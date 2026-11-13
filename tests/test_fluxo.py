@@ -156,7 +156,14 @@ def test_fluxo_completo(app):
     # visão nacional e confirmação de recebimento
     painel = adm.get('/nacional/envios?ano=2026').get_data(as_text=True)
     assert 'Vila Ramos/SP' in painel
-    adm.post(f"/nacional/fechamento/{f['id']}/receber")
+    conf = adm.get(f"/nacional/conferir/{f['id']}").get_data(as_text=True)
+    assert 'R$ 3.014,11' in conf and 'confere com o relatório' in conf and 'Aprovar' in conf
+    assert 'Nenhum envio aprovado' in adm.get('/nacional/livro?ano=2026').get_data(as_text=True)
+    adm.post(f"/nacional/fechamento/{f['id']}/receber", data={'seguir': '1'})
+    livro = adm.get('/nacional/livro?ano=2026').get_data(as_text=True)
+    assert 'R$ 773,65' in livro and 'Vila Ramos/SP' in livro and 'R$ 3.014,11' in livro
+    xl = adm.get('/nacional/livro.xlsx?ano=2026')
+    assert xl.status_code == 200 and xl.data[:2] == b'PK'
     with appmod.get_db() as conn:
         assert conn.execute('SELECT status FROM fechamentos WHERE id=?', (f['id'],)).fetchone()['status'] == 'recebido'
 
@@ -173,6 +180,27 @@ def test_fluxo_completo(app):
     pas.post(f"/fechamento/{f10['id']}/reabrir", data={'motivo': 'faltou lançar a oferta missionária'})
     with appmod.get_db() as conn:
         assert not conn.execute('SELECT 1 FROM fechamentos WHERE id=?', (f10['id'],)).fetchone()
+
+    # a nacional devolve com motivo: o mês reabre e o tesoureiro vê o motivo
+    tes.post('/fechamento/fechar', data={'ano': 2026, 'mes': 10})
+    with appmod.get_db() as conn:
+        f10 = conn.execute('SELECT id FROM fechamentos WHERE cong_id=? AND ano=2026 AND mes=10', (cid,)).fetchone()
+    adm.post(f"/nacional/fechamento/{f10['id']}/devolver", data={'motivo': 'depósito não apareceu no extrato'})
+    with appmod.get_db() as conn:
+        assert not conn.execute('SELECT 1 FROM fechamentos WHERE id=?', (f10['id'],)).fetchone()
+        assert not conn.execute('SELECT 1 FROM transacoes WHERE origem=?', (f"fechamento:{f10['id']}",)).fetchone()
+    tela = tes.get('/fechamento?ano=2026&mes=10').get_data(as_text=True)
+    assert 'depósito não apareceu no extrato' in tela
+    tes.post('/fechamento/fechar', data={'ano': 2026, 'mes': 10})
+    assert 'depósito não apareceu no extrato' not in tes.get('/fechamento?ano=2026&mes=10').get_data(as_text=True)
+    # o tesoureiro local não pode devolver nem aprovar
+    with appmod.get_db() as conn:
+        f10 = conn.execute('SELECT id FROM fechamentos WHERE cong_id=? AND ano=2026 AND mes=10', (cid,)).fetchone()
+    tes.post(f"/nacional/fechamento/{f10['id']}/devolver", data={'motivo': 'tentativa indevida'})
+    with appmod.get_db() as conn:
+        assert conn.execute('SELECT 1 FROM fechamentos WHERE id=?', (f10['id'],)).fetchone()
+    pas.post(f"/fechamento/{f10['id']}/reabrir", data={'motivo': 'limpar para os próximos testes'})
+    with appmod.get_db() as conn:
         aud = conn.execute("SELECT detalhe FROM auditoria WHERE acao='fechamento.reabrir'").fetchone()
     assert 'faltou lançar' in aud['detalhe']
 
@@ -182,7 +210,7 @@ def test_fluxo_completo(app):
                '/configuracoes', '/minha-conta', '/tutorial', '/exportar/excel?ano=2026', '/lancar', '/lancar?tipo=Entrada',
                '/lancar?tipo=Saída', '/visao-geral', '/lancamentos?livro=Projetos', '/livro-do-mes?ano=2026&mes=9']),
         (pas, ['/', '/lancamentos', '/dizimos', '/fechamento?ano=2026&mes=9', '/carta?ano=2026']),
-        (adm, ['/nacional/envios', '/nacional/cartas?ano=2027', '/nacional/regras', '/admin', '/nacional/auditoria',
+        (adm, ['/nacional/envios', '/nacional/livro', '/nacional/livro?ano=2025', '/nacional/cartas?ano=2027', '/nacional/regras', '/admin', '/nacional/auditoria',
                f'/nacional/carta/{cid}/2026']),
     ]:
         for p in paginas:

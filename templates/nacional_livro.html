@@ -1,0 +1,53 @@
+{% extends 'base.html' %}
+{% block title %}Livro da nacional — Tesouraria INJ{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Livro da nacional</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
+  <div>
+    <h1 class="page-title">Livro da nacional</h1>
+    <p class="text-muted mb-0 small">Montado sozinho a partir dos envios aprovados. Ninguém relança nada: o que a congregação lançou e você aprovou já está aqui, no mês de referência.</p>
+  </div>
+  <form class="d-flex gap-2 align-items-center">
+    <select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
+      {% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}
+    </select>
+    <a href="{{ url_for('nacional_livro_excel', ano=ano) }}" class="btn btn-sm btn-outline-success"><i class="bi bi-file-earmark-excel me-1"></i>Baixar Excel</a>
+  </form>
+</div>
+
+<div class="row g-3 mb-4">
+  <div class="col-6 col-lg-4"><div class="stat-card entrada"><div class="stat-label">Aprovado no ano</div><div class="stat-value" style="font-size:1.15rem">{{ lv.total | brl }}</div></div></div>
+  <div class="col-6 col-lg-4"><div class="stat-card dizimo"><div class="stat-label">Enviado, aguardando conferência</div><div class="stat-value" style="font-size:1.15rem">{{ lv.pendente | brl }}</div></div></div>
+  <div class="col-12 col-lg-4"><div class="stat-card saldo"><div class="stat-label">Congregações com envio aprovado</div><div class="stat-value" style="font-size:1.15rem">{{ lv.congs | length }}</div></div></div>
+</div>
+
+{% macro matriz(titulo, icone, cab, linhas) %}
+<div class="table-card mb-4">
+  <div class="table-header"><h6 class="mb-0"><i class="bi {{ icone }} me-2 text-primary"></i>{{ titulo }}</h6></div>
+  <div class="table-responsive">
+    <table class="table table-sm mb-0 small align-middle" style="white-space:nowrap">
+      <thead><tr><th style="min-width:200px">{{ cab }}</th>{% for m in MESES %}<th class="text-end">{{ m[:3] | capitalize }}</th>{% endfor %}<th class="text-end">Total</th></tr></thead>
+      <tbody>
+        {% for nome, meses, total in linhas %}
+        <tr><td>{{ nome }}</td>{% for v in meses %}<td class="text-end">{{ (v | brl) if v else '—' }}</td>{% endfor %}<td class="text-end fw-semibold">{{ total | brl }}</td></tr>
+        {% else %}
+        <tr><td colspan="14" class="text-center text-muted py-4">Nenhum envio aprovado em {{ ano }}. Aprove em “Envios das congregações”.</td></tr>
+        {% endfor %}
+      </tbody>
+      {% if linhas %}
+      <tfoot><tr class="table-light fw-bold"><td>Total</td>{% for v in lv.tot_mes %}<td class="text-end">{{ (v | brl) if v else '—' }}</td>{% endfor %}<td class="text-end">{{ lv.total | brl }}</td></tr></tfoot>
+      {% endif %}
+    </table>
+  </div>
+</div>
+{% endmacro %}
+
+{% set por_linha = [] %}
+{% for l in lv.linhas %}{% set _ = por_linha.append((('Distrital · ' if l.grupo == 'distrital' else '') ~ l.rotulo, l.meses, l.total)) %}{% endfor %}
+{{ matriz('Entradas por linha do Relatório Econômico', 'bi-journal-text', 'Linha', por_linha) }}
+
+{% set por_cong = [] %}
+{% for c in lv.congs %}{% set _ = por_cong.append((c.nome, c.meses, c.total)) %}{% endfor %}
+{{ matriz('Entradas por congregação', 'bi-buildings', 'Congregação', por_cong) }}
+{% endblock %}

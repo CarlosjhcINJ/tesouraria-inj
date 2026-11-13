@@ -337,12 +337,7 @@ def test_cadastro_obrigatorio_livro_excel_e_tutorial(app):
     with appmod.get_db() as conn:
         c = conn.execute("SELECT c.* FROM compromissos c JOIN congregacoes g ON g.id=c.cong_id WHERE g.nome='Nova Esperança'").fetchone()
         assert c['categoria'] == 'nova' and c['fundo_local_pct'] == 0
-    # salvo pelo tesoureiro, ainda não liberado: falta o pastor confirmar
-    r = tes.get('/lancar?tipo=Saída')
-    assert '/configuracoes' in r.headers['Location']
-    pas = entrar(app, 'ne.pas', 'pastor12345')
-    assert 'Calcular, salvar e confirmar' in pas.get('/configuracoes').get_data(as_text=True)
-    pas.post('/configuracoes', data={'acao': 'porcentagens', 'ano': date.today().year})
+    # salvo pelo tesoureiro: já liberado, sem esperar o pastor
     pag = tes.get('/lancar?tipo=Saída').get_data(as_text=True)
     assert 'Em qual <b>livro</b>' in pag and 'livro-escolha' in pag
     # exportação
@@ -411,7 +406,7 @@ def test_pastor_tesoureiro_um_so_usuario(app):
         assert not conn.execute("SELECT 1 FROM usuarios WHERE cong_id=? AND usuario<>'pe.unico'", (u['cong_id'],)).fetchone()
     um = entrar(app, 'pe.unico', 'pastor12345')
     cfg = um.get('/configuracoes').get_data(as_text=True)
-    assert 'Pr. Paulo Lima' in cfg and 'Calcular, salvar e confirmar' in cfg
+    assert 'Pr. Paulo Lima' in cfg and 'Salvar cadastro' in cfg
     ano = date.today().year
     um.post('/configuracoes', data={'acao': 'porcentagens', 'ano': ano})       # salva e já confirma (é o pastor)
     with appmod.get_db() as conn:
@@ -476,7 +471,7 @@ def test_nacional_confirma_configuracao(app):
     adm = entrar(app, 'nacional', 'senha-forte-123')
     r = adm.post('/admin/nova', data={'nome': 'Bispo Teste', 'tes_nome': 'Ana Bispo', 'tes_usuario': 'bt.tes', 'tes_senha': 'tesoureiro123'})
     adm.get(r.headers['Location'])
-    assert 'Calcular, salvar e confirmar' in adm.get('/configuracoes').get_data(as_text=True)
+    assert 'Salvar cadastro' in adm.get('/configuracoes').get_data(as_text=True)
     ano = date.today().year
     adm.post('/configuracoes', data={'acao': 'dados', 'nome_congregacao': 'Bispo Teste', 'nome_pastor': 'Bispo Carlos',
                                      'nome_tesoureiro': 'Ana Bispo', 'ano_atual': ano, 'saldo_ano_anterior': '0'})
@@ -503,3 +498,18 @@ def test_recuperar_admin(app):
     finally:
         os.environ.pop('ADMIN_RESETAR')
     entrar(app, 'nacional', 'senha-forte-123')
+
+
+def test_cadastro_um_botao_salva_tudo(app):
+    """Um só botão salva nomes e classificação; o tesoureiro já fica liberado para lançar."""
+    adm = entrar(app, 'nacional', 'senha-forte-123')
+    r = adm.post('/admin/nova', data={'nome': 'Um Botão', 'tes_nome': 'Lia', 'tes_usuario': 'ub.tes', 'tes_senha': 'tesoureiro123'})
+    tes = entrar(app, 'ub.tes', 'tesoureiro123')
+    ano = date.today().year
+    dados = {'acao': 'cadastro', 'ano': ano, 'nome_congregacao': 'Um Botão/SP', 'nome_pastor': 'Pr. Davi',
+             'nome_tesoureiro': 'Lia Rocha', 'ano_atual': ano, 'saldo_ano_anterior': '0'}
+    dados.update({f'm{i}': '2.000,00' for i in range(12)})
+    r = tes.post('/configuracoes', data=dados, follow_redirects=True)
+    pag = r.get_data(as_text=True)
+    assert 'Cadastro salvo' in pag and 'Pr. Davi' in pag and 'Um Botão/SP' in pag
+    assert 'Em qual <b>livro</b>' in tes.get('/lancar?tipo=Saída').get_data(as_text=True)

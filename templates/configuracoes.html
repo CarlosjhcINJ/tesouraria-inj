@@ -12,22 +12,23 @@
 <div class="passos mb-4">
   <span class="passo {{ 'feito' if cfg.get('nome_pastor') and cfg.get('nome_tesoureiro') else 'atual' }}">1. Responsáveis</span>
   <span class="passo {{ 'feito' if comp else ('atual' if cfg.get('nome_pastor') else '') }}">2. Dízimos do ano anterior → classificação</span>
-  <span class="passo {{ 'feito' if comp and comp['confirmado_em'] else ('atual' if comp else '') }}">3. Pastor confirma</span>
-  <span class="passo {{ 'feito' if comp and comp['confirmado_em'] else '' }}">4. Liberado para lançar</span>
+  <span class="passo {{ 'feito' if comp and cfg.get('nome_pastor') and cfg.get('nome_tesoureiro') else '' }}">3. Liberado para lançar</span>
 </div>
 
+<form method="POST" id="form-cadastro">
+<input type="hidden" name="acao" value="cadastro"/>
+<input type="hidden" name="ano" value="{{ ano }}"/>
 <div class="row g-4">
   <!-- 1. Responsáveis -->
   <div class="col-xl-5">
-    <form method="POST" class="form-card h-100">
-      <input type="hidden" name="acao" value="dados"/>
+    <div class="form-card h-100">
       <div class="form-section-title"><span class="guia-num me-2" style="width:28px;height:28px;font-size:.9rem">1</span>Responsáveis e dados</div>
       <fieldset {% if not pode %}disabled{% endif %}>
       <div class="mb-3">
         <label class="form-label">Nome da congregação</label>
         <input type="text" name="nome_congregacao" class="form-control" value="{{ cfg.get('nome_congregacao', '') }}" required/>
       </div>
-      <div class="row g-3 mb-3">
+      <div class="row g-3 mb-1">
         <div class="col-md-6">
           <label class="form-label"><i class="bi bi-person-circle me-1"></i>Pastor <span class="text-danger">*</span></label>
           <input type="text" name="nome_pastor" class="form-control" value="{{ cfg.get('nome_pastor', '') }}" placeholder="Nome completo" required/>
@@ -57,9 +58,8 @@
                    value="{{ (cfg.get('saldo_ano_anterior') or '0') | float | brl | replace('R$ ', '') }}"/></div>
         </div>
       </div>
-      <button class="btn btn-primary w-100"><i class="bi bi-save me-2"></i>Salvar responsáveis</button>
       </fieldset>
-    </form>
+    </div>
   </div>
 
   <!-- 2. Dízimos do ano anterior -> classificação e liquidação -->
@@ -67,60 +67,59 @@
     <div class="form-card h-100">
       <div class="d-flex justify-content-between align-items-start">
         <div class="form-section-title"><span class="guia-num me-2" style="width:28px;height:28px;font-size:.9rem">2</span>Classificação e liquidação de {{ ano }}</div>
-        <form><select name="ano" class="form-select form-select-sm" style="width:90px" onchange="this.form.submit()">
-          {% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}</select></form>
+        <select class="form-select form-select-sm" style="width:90px" aria-label="Ano"
+                onchange="location.href='{{ url_for('configuracoes') }}?ano='+this.value">
+          {% for a in anos %}<option value="{{ a }}" {% if a == ano %}selected{% endif %}>{{ a }}</option>{% endfor %}</select>
       </div>
 
       {% if comp %}
-        {% if comp['confirmado_em'] %}
-        <div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>Confirmada pelo pastor em {{ comp['confirmado_em'] | data }}.
-          {% if travado %}Para mudar, fale com a Tesouraria Nacional.{% endif %}</div>
-        {% else %}
-        <div class="alert alert-warning py-2 small"><i class="bi bi-hourglass-split me-1"></i>{{ comp['observacao'] or 'Emitida' }}. <b>Os lançamentos só são liberados depois que o pastor confirmar.</b> Falta o pastor confirmar
-          {% if e_papel('pastor') or papel == 'admin' %}— ao salvar abaixo, você confirma.{% else %}(o pastor entra e salva esta tela, ou confirma na <a href="{{ url_for('carta', ano=ano) }}">carta anual</a>).{% endif %}</div>
-        {% endif %}
+      <div class="alert alert-success py-2 small"><i class="bi bi-check-circle me-1"></i>Classificação de {{ ano }} salva — os lançamentos estão liberados.
+        {% if comp['confirmado_em'] %}Confirmada pelo pastor em {{ comp['confirmado_em'] | data }}.{% if travado %} Para mudar, fale com a Tesouraria Nacional.{% endif %}{% endif %}</div>
       {% endif %}
 
       <p class="small text-muted mb-2">Digite o <b>dízimo bruto de cada mês</b> (de dezembro de {{ ano - 2 }} a novembro de {{ ano - 1 }}).
         Os meses que já estão no sistema vêm preenchidos. Congregação nova: deixe tudo em zero — começa do zero.</p>
 
-      <form method="POST" id="form-base">
-        <input type="hidden" name="acao" value="porcentagens"/>
-        <input type="hidden" name="ano" value="{{ ano }}"/>
-        <fieldset {% if travado or not pode %}disabled{% endif %}>
-        <div class="row g-2 mb-3">
-          {% for m in meses_base %}
-          <div class="col-4 col-md-3">
-            <label class="form-label small mb-0">{{ m.rotulo }}{% if m.do_sistema %} <i class="bi bi-database-check text-success" title="Valor do sistema"></i>{% endif %}</label>
-            <input type="text" inputmode="decimal" name="m{{ loop.index0 }}" class="form-control form-control-sm base-mes"
-                   value="{{ (m.valor | brl | replace('R$ ', '')) if m.valor else '' }}" placeholder="0,00"/>
-          </div>
-          {% endfor %}
+      <fieldset {% if travado or not pode %}disabled{% endif %}>
+      <div class="row g-2 mb-3">
+        {% for m in meses_base %}
+        <div class="col-4 col-md-3">
+          <label class="form-label small mb-0">{{ m.rotulo }}{% if m.do_sistema %} <i class="bi bi-database-check text-success" title="Valor do sistema"></i>{% endif %}</label>
+          <input type="text" inputmode="decimal" name="m{{ loop.index0 }}" class="form-control form-control-sm base-mes"
+                 value="{{ (m.valor | brl | replace('R$ ', '')) if m.valor else '' }}" placeholder="0,00"/>
         </div>
+        {% endfor %}
+      </div>
+      </fieldset>
 
-        <div class="calc-box mb-3">
-          <div class="row g-2 small">
-            <div class="col-6 col-md-4"><div class="text-muted">Média mensal</div><b id="r-media">—</b></div>
-            <div class="col-6 col-md-4"><div class="text-muted">Salário mínimo base ({{ ano - 1 }})</div><b>{{ sm | brl }}</b></div>
-            <div class="col-12 col-md-4"><div class="text-muted">Classificação</div><b id="r-cat" class="text-primary">—</b></div>
-          </div>
-          <hr class="my-2"/>
-          <div class="small fw-bold mb-1">Liquidação de um mês com dízimo igual à média</div>
-          <div class="calc-linha"><span>Dízimo dos Dízimos {{ '%.0f' | format(reg.get('pct_dizimo_dizimos', 0.1) * 100) }}%</span><b id="ex-dd">—</b></div>
-          <div class="calc-linha"><span>Nivelação <span id="r-niv" class="text-muted"></span></span><b id="ex-niv">—</b></div>
-          <div class="calc-linha"><span>Betel <span id="r-bet" class="text-muted"></span></span><b id="ex-bet">—</b></div>
-          <div class="calc-linha"><span>Aporte ao fundo local <b id="r-fl"></b></span><b id="ex-fl">—</b></div>
-          <div class="calc-linha total"><span>Sustento pastoral</span><b id="ex-liq">—</b></div>
+      <div class="calc-box mb-2">
+        <div class="row g-2 small">
+          <div class="col-6 col-md-4"><div class="text-muted">Média mensal</div><b id="r-media">—</b></div>
+          <div class="col-6 col-md-4"><div class="text-muted">Salário mínimo base ({{ ano - 1 }})</div><b>{{ sm | brl }}</b></div>
+          <div class="col-12 col-md-4"><div class="text-muted">Classificação</div><b id="r-cat" class="text-primary">—</b></div>
         </div>
-        <button class="btn btn-primary w-100"><i class="bi bi-calculator me-2"></i>{{ 'Calcular, salvar e confirmar' if (e_papel('pastor') or papel == 'admin') else 'Calcular e salvar' }}</button>
-        </fieldset>
-      </form>
-      <div class="form-text mt-2">Regras do Regulamento Interno: plenamente formada com média a partir de 1 salário mínimo; em formação a partir de
+        <hr class="my-2"/>
+        <div class="small fw-bold mb-1">Liquidação de um mês com dízimo igual à média</div>
+        <div class="calc-linha"><span>Dízimo dos Dízimos {{ '%.0f' | format(reg.get('pct_dizimo_dizimos', 0.1) * 100) }}%</span><b id="ex-dd">—</b></div>
+        <div class="calc-linha"><span>Nivelação <span id="r-niv" class="text-muted"></span></span><b id="ex-niv">—</b></div>
+        <div class="calc-linha"><span>Betel <span id="r-bet" class="text-muted"></span></span><b id="ex-bet">—</b></div>
+        <div class="calc-linha"><span>Aporte ao fundo local <b id="r-fl"></b></span><b id="ex-fl">—</b></div>
+        <div class="calc-linha total"><span>Sustento pastoral</span><b id="ex-liq">—</b></div>
+      </div>
+      <div class="form-text">Regras do Regulamento Interno: plenamente formada com média a partir de 1 salário mínimo; em formação a partir de
         {{ '%.2f' | format(reg.get('fator_formacao', 0.333)) | replace('.', ',') }} SM; nivelação acima de {{ '%.2f' | format(reg.get('fator_nivelacao', 1.25)) | replace('.', ',') }} SM;
         fundo local de 1% por salário mínimo inteiro do saldo após o Dízimo dos Dízimos.</div>
     </div>
   </div>
 </div>
+
+{% if pode %}
+<div class="mt-4">
+  <button class="btn btn-primary btn-lg w-100"><i class="bi bi-save me-2"></i>Salvar cadastro</button>
+  <div class="form-text text-center mt-2">Um botão só: salva os responsáveis e a classificação do ano. Depois disso, os lançamentos ficam liberados.</div>
+</div>
+{% endif %}
+</form>
 {% endblock %}
 
 {% block scripts %}

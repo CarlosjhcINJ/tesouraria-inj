@@ -26,10 +26,10 @@
     <a class="mes-cel {{ s or '' }} {% if loop.index == mes %}border border-dark{% endif %}" href="{{ url_for('fechamento', ano=ano, mes=loop.index) }}" title="{{ STATUS_FECH[s][0] if s else 'Aberto' }}">{{ m[:3] | capitalize }}</a>
     {% endfor %}
   </div>
-  {% set ordem = ['aberto','fechado','aprovado','enviado','recebido'] %}
-  {% set idx = ordem.index(st) %}
+  {% set ordem = ['aberto','aprovado','enviado','recebido'] %}
+  {% set idx = ordem.index('aprovado' if st == 'fechado' else st) %}
   <div class="passos">
-    {% for rotulo in ['1. Lançar no mês','2. Tesoureiro fecha','3. Pastor aprova','4. Depósito e comprovante','5. Nacional confirma'] %}
+    {% for rotulo in ['1. Lançar no mês','2. Fechar o mês','3. Depósito e comprovante','4. Nacional confirma'] %}
     <span class="passo {% if loop.index0 < idx %}feito{% elif loop.index0 == idx %}atual{% endif %}">{{ rotulo }}</span>
     {% endfor %}
   </div>
@@ -76,17 +76,8 @@
         {% elif calc %}
           <p class="text-muted mb-0">Aguardando o tesoureiro fechar o mês.</p>
         {% endif %}
-      {% elif st == 'fechado' %}
-        <p>O tesoureiro fechou o mês. Total a enviar: <strong>{{ f['total'] | brl }}</strong>.</p>
-        {% if e_papel('pastor') %}
-          <form method="POST" action="{{ url_for('fechamento_aprovar', fid=f['id']) }}" class="mb-3">
-            <button class="btn btn-success"><i class="bi bi-check-circle me-2"></i>Aprovar relatório</button>
-          </form>
-        {% else %}
-          <p class="text-muted">Aguardando a aprovação do pastor.</p>
-        {% endif %}
-      {% elif st == 'aprovado' %}
-        <p>Relatório aprovado. Deposite <strong>{{ f['total'] | brl }}</strong> até <strong>{{ limite.strftime('%d/%m/%Y') }}</strong> na conta nacional:</p>
+      {% elif st in ('fechado', 'aprovado') %}
+        <p>Mês fechado. Deposite <strong>{{ f['total'] | brl }}</strong> até <strong>{{ limite.strftime('%d/%m/%Y') }}</strong> na conta nacional:</p>
         <div class="p-3 rounded-xl mb-3 small" style="background:#f8fafc; border:1px solid #eef0f4">
           <div><strong>{{ nacional.favorecido }}</strong> · CNPJ {{ nacional.cnpj }}</div>
           <div>{{ nacional.banco }} · Agência {{ nacional.agencia }} · Operação {{ nacional.operacao }}</div>
@@ -94,6 +85,8 @@
           <div>Pix: {{ nacional.pix }}</div>
         </div>
         {% if e_papel('tesoureiro') %}
+        <div class="alert alert-info py-2 small"><i class="bi bi-info-circle me-1"></i>Não precisa mandar por WhatsApp: ao anexar o comprovante aqui,
+          a Tesouraria Nacional já recebe o Relatório Econômico e o comprovante no sistema.</div>
         <form method="POST" action="{{ url_for('fechamento_comprovante', fid=f['id']) }}" enctype="multipart/form-data">
           <div class="row g-2 mb-2">
             <div class="col-6"><label class="form-label">Valor do comprovante</label>

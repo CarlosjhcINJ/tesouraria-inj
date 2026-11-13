@@ -122,7 +122,7 @@ def test_fluxo_completo(app):
     assert tes.post('/fechamento/fechar', data={'ano': 2026, 'mes': 9}).status_code == 302
     with appmod.get_db() as conn:
         f = conn.execute('SELECT * FROM fechamentos WHERE cong_id=? AND ano=2026 AND mes=9', (cid,)).fetchone()
-    assert f['status'] == 'fechado' and f['total'] == 3014.11
+    assert f['status'] == 'aprovado' and f['total'] == 3014.11   # fecha e já pode depositar
 
     # mês travado: não aceita lançamento nem dízimo
     tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Entrada', 'item': 'Outras Ofertas',
@@ -131,11 +131,7 @@ def test_fluxo_completo(app):
         n = conn.execute("SELECT COUNT(*) AS n FROM transacoes WHERE cong_id=? AND item='Outras Ofertas'", (cid,)).fetchone()['n']
     assert n == 0
 
-    # tesoureiro não aprova; pastor aprova
-    assert tes.post(f"/fechamento/{f['id']}/aprovar").status_code == 302
-    with appmod.get_db() as conn:
-        assert conn.execute('SELECT status FROM fechamentos WHERE id=?', (f['id'],)).fetchone()['status'] == 'fechado'
-    pas.post(f"/fechamento/{f['id']}/aprovar")
+    # não espera aprovação do pastor
 
     # comprovante errado é recusado
     tes.post(f"/fechamento/{f['id']}/comprovante", data={'valor': '3.000,00', 'data': '2026-10-07',
@@ -561,3 +557,15 @@ def test_arquivar_libera_nome(app):
     assert r.status_code == 302   # nome real livre de novo
     r = adm.post('/admin/arquivar-todas', data={'confirmar': 'nao'}, follow_redirects=True)
     assert 'digite ARQUIVAR' in r.get_data(as_text=True)
+
+
+def test_entrada_dinheiro_e_pix(app):
+    """Uma oferta recebida parte em dinheiro e parte em Pix vira dois lançamentos."""
+    tes = entrar(app, 'ub.tes', 'tesoureiro123')
+    ano = date.today().year
+    tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Entrada', 'item': 'Outras Ofertas', 'valor': '300,00',
+                                   'forma': 'Dinheiro + Pix', 'valor_pix': '120,00', 'mes': 'janeiro', 'ano': ano})
+    with appmod.get_db() as conn:
+        rows = conn.execute("SELECT forma, valor FROM transacoes t JOIN congregacoes c ON c.id=t.cong_id "
+                            "WHERE c.nome='Um Botão/SP' AND t.item='Outras Ofertas' ORDER BY t.id").fetchall()
+    assert [(r['forma'], r['valor']) for r in rows] == [('Dinheiro', 180.0), ('Pix', 120.0)]

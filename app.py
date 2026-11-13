@@ -808,6 +808,13 @@ def login():
                 if not nxt.startswith('/') or nxt.startswith('//'):
                     nxt = url_for('inicio')
                 return redirect(nxt)
+            # senha certa, mas o acesso foi desativado (ex.: congregação de teste arquivada): dizer o caminho
+            inativo = conn.execute('SELECT * FROM usuarios WHERE usuario=? AND ativo=0', (usuario,)).fetchone()
+            if not u and inativo and verificar_senha(inativo['senha_hash'], senha):
+                flash('Este acesso era do período de teste e foi desativado. Crie o seu acesso novo pelo link '
+                      'que a Tesouraria Nacional enviou aos pastores (ou pelo convite do seu pastor, se você é tesoureiro).',
+                      'warning')
+                return render_template('login.html', sem_admin=sem_admin)
             conn.execute('INSERT INTO login_falhas (chave, quando) VALUES (?,?)',
                          (chave, _agora_utc().strftime('%Y-%m-%d %H:%M:%S')))
         flash('Usuário ou senha incorretos.', 'danger')

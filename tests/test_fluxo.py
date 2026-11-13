@@ -545,3 +545,19 @@ def test_autocadastro_pastor_e_convite_tesoureiro(app):
     c.post('/convite-novo')
     r = app.test_client().get(f'/convite/{token}')
     assert r.status_code == 302 and '/login' in r.headers['Location']
+
+
+def test_arquivar_libera_nome(app):
+    adm = entrar(app, 'nacional', 'senha-forte-123')
+    adm.post('/admin/nova', data={'nome': 'Teste Arquivo', 'tes_nome': 'T', 'tes_usuario': 'ta.tes', 'tes_senha': 'tesoureiro123'})
+    with appmod.get_db() as conn:
+        cid = conn.execute("SELECT id FROM congregacoes WHERE nome='Teste Arquivo'").fetchone()['id']
+        codigo = appmod._codigo_pastores(conn)
+    adm.post(f'/admin/congregacao/{cid}/arquivar')
+    r = app.test_client().post('/login', data={'usuario': 'ta.tes', 'senha': 'tesoureiro123'})
+    assert r.status_code == 200   # usuário antigo não entra mais
+    r = app.test_client().post('/criar-acesso', data={'codigo': codigo, 'congregacao': 'Teste Arquivo', 'nome': 'Pr. Novo',
+                                                      'email': 'novo@ex.com', 'senha': 'pastor12345', 'senha2': 'pastor12345'})
+    assert r.status_code == 302   # nome real livre de novo
+    r = adm.post('/admin/arquivar-todas', data={'confirmar': 'nao'}, follow_redirects=True)
+    assert 'digite ARQUIVAR' in r.get_data(as_text=True)

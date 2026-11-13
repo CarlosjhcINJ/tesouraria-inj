@@ -20,6 +20,8 @@ import regras as R
 from regras import MESES
 
 app = Flask(__name__)
+from werkzeug.middleware.proxy_fix import ProxyFix  # noqa: E402
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)   # links completos em https atrás do Render
 app.secret_key = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
 app.config.update(
     SESSION_COOKIE_HTTPONLY=True,
@@ -628,6 +630,157 @@ def _bloqueado(conn, chave):
     return n >= 5
 
 
+def _abrir_sessao(u, cong):
+    session.clear()
+    session.permanent = True
+    session.update(user_id=u['id'], user_nome=u['nome'], usuario=u['usuario'], papel=u['papel'],
+                   cong_id=u['cong_id'], cong_nome=cong['nome'] if cong else 'Tesouraria Nacional',
+                   is_admin=u['papel'] == 'admin')
+
+
+# ═════════════════════════════════════════════
+#  AUTOCADASTRO: código dos pastores e convite do tesoureiro
+# ═════════════════════════════════════════════
+def _codigo_pastores(conn, novo=False):
+    atual = conn.execute("SELECT value FROM config_nacional WHERE key='codigo_pastores'").fetchone()
+    if atual and atual['value'] and not novo:
+        return atual['value']
+    cod = secrets.token_hex(4).upper()
+    conn.execute("INSERT INTO config_nacional (key, value) VALUES ('codigo_pastores',?) "
+                 "ON CONFLICT (key) DO UPDATE SET value=excluded.value", (cod,))
+    return cod
+
+
+def _token_convite(conn, cid, novo=False):
+    atual = conn.execute("SELECT value FROM config WHERE cong_id=? AND key='convite_token'", (cid,)).fetchone()
+    if atual and atual['value'] and not novo:
+        return atual['value']
+    tok = secrets.token_urlsafe(9)
+    conn.execute("INSERT INTO config (cong_id, key, value) VALUES (?,'convite_token',?) "
+                 "ON CONFLICT (cong_id, key) DO UPDATE SET value=excluded.value", (cid, tok))
+    return tok
+
+
+def _limite_publico(conn, chave):
+    """Freia tentativas em formulários públicos (mesma regra do login)."""
+    if _bloqueado(conn, chave):
+        raise ValueError('Muitas tentativas. Aguarde 15 minutos e tente de novo.')
+
+
+def _ip():
+    return request.headers.get('X-Forwarded-For', request.remote_addr or '').split(',')[0].strip()
+
+
+def _validar_pessoa(f):
+    nome, email, senha = f.get('nome', '').strip(), f.get('email', '').strip().lower(), f.get('senha', '')
+    if not nome:
+        raise ValueError('Informe o seu nome completo.')
+    if '@' not in email or '.' not in email.split('@')[-1]:
+        raise ValueError('Informe um e-mail válido: ele será o seu usuário para entrar.')
+    if senha != f.get('senha2', ''):
+        raise ValueError('As duas senhas não são iguais.')
+    return nome, email, senha
+
+
+@app.route('/criar-acesso', methods=['GET', 'POST'])
+def criar_acesso():
+    """O pastor cria a própria congregação e o próprio acesso com o código da região."""
+    codigo = (request.values.get('c') or request.form.get('codigo') or '').strip().upper()
+    if request.method == 'POST':
+        f = request.form
+        try:
+            with get_db() as conn:
+                chave = f'cadastro|{_ip()}'
+                _limite_publico(conn, chave)
+                if not codigo or codigo != _codigo_pastores(conn):
+                    conn.execute('INSERT INTO login_falhas (chave, quando) VALUES (?,?)',
+                                 (chave, _agora_utc().strftime('%Y-%m-%d %H:%M:%S')))
+                    raise ValueError('Código inválido. Peça o link atualizado à Tesouraria Nacional.')
+                nome_cong = f.get('congregacao', '').strip()[:120]
+                if len(nome_cong) < 3:
+                    raise ValueError('Informe o nome da congregação (ex.: Vila Ramos/SP).')
+                existe = conn.execute('SELECT id FROM congregacoes WHERE LOWER(TRIM(nome))=?', (nome_cong.lower(),)).fetchone()
+                if existe:
+                    raise ValueError(f'A congregação "{nome_cong}" já está cadastrada. Se você é o pastor dela, '
+                                     'peça o link de convite a quem já tem acesso ou à Tesouraria Nacional.')
+                nome, email, senha = _validar_pessoa(f)
+                unico = f.get('tambem_tesoureiro') == '1'
+                legado = 'usuario' in _cols(conn, 'congregacoes')
+                if legado:
+                    cid = conn.insert('INSERT INTO congregacoes (nome, usuario, senha_hash) VALUES (?,?,?)',
+                                      (nome_cong, 'cong-' + secrets.token_hex(6), '-'))
+                else:
+                    cid = conn.insert('INSERT INTO congregacoes (nome) VALUES (?)', (nome_cong,))
+                padrao = _config_defaults(nome_cong)
+                padrao['nome_pastor'] = nome
+                if unico:
+                    padrao['nome_tesoureiro'] = nome
+                for k, v in padrao.items():
+                    conn.execute('INSERT INTO config (cong_id, key, value) VALUES (?,?,?) ON CONFLICT (cong_id, key) DO NOTHING',
+                                 (cid, k, v))
+                uid = _novo_usuario(conn, cid, nome, email, senha, 'pastor_tesoureiro' if unico else 'pastor')
+                auditar(conn, 'autocadastro.pastor', f'{nome_cong} — {nome}', cong_id=cid)
+                u = conn.execute('SELECT * FROM usuarios WHERE id=?', (uid,)).fetchone()
+                cong = conn.execute('SELECT * FROM congregacoes WHERE id=?', (cid,)).fetchone()
+            _abrir_sessao(u, cong)
+            flash('Bem-vindo! Sua congregação e seu acesso foram criados. '
+                  + ('Agora preencha o cadastro e clique em "Salvar cadastro".' if unico else
+                     'Convide o tesoureiro com o link desta página e depois preencham o cadastro.'), 'success')
+            return redirect(url_for('configuracoes'))
+        except ValueError as e:
+            flash(str(e), 'danger')
+    return render_template('acesso.html', modo='pastor', codigo=codigo, form=request.form)
+
+
+@app.route('/convite/<token>', methods=['GET', 'POST'])
+def convite(token):
+    """O tesoureiro entra na congregação certa pelo link que o pastor enviou."""
+    with get_db() as conn:
+        row = conn.execute("SELECT c.* FROM config f JOIN congregacoes c ON c.id=f.cong_id "
+                           "WHERE f.key='convite_token' AND f.value=? AND c.ativo=1", (token,)).fetchone()
+    if not row:
+        flash('Este link de convite não vale mais. Peça um link novo ao pastor.', 'danger')
+        return redirect(url_for('login'))
+    if request.method == 'POST':
+        try:
+            with get_db() as conn:
+                _limite_publico(conn, f'convite|{_ip()}')
+                nome, email, senha = _validar_pessoa(request.form)
+                uid = _novo_usuario(conn, row['id'], nome, email, senha, 'tesoureiro')
+                tem_nome = conn.execute("SELECT value FROM config WHERE cong_id=? AND key='nome_tesoureiro'", (row['id'],)).fetchone()
+                if not (tem_nome and tem_nome['value']):
+                    conn.execute("INSERT INTO config (cong_id, key, value) VALUES (?,'nome_tesoureiro',?) "
+                                 "ON CONFLICT (cong_id, key) DO UPDATE SET value=excluded.value", (row['id'], nome))
+                auditar(conn, 'autocadastro.tesoureiro', f'{row["nome"]} — {nome}', cong_id=row['id'])
+                u = conn.execute('SELECT * FROM usuarios WHERE id=?', (uid,)).fetchone()
+            _abrir_sessao(u, row)
+            flash(f'Bem-vindo à tesouraria de {row["nome"]}! Confira o cadastro e clique em "Salvar cadastro".', 'success')
+            return redirect(url_for('configuracoes'))
+        except ValueError as e:
+            flash(str(e), 'danger')
+    return render_template('acesso.html', modo='tesoureiro', cong=row, form=request.form)
+
+
+@app.route('/convite-novo', methods=['POST'])
+@cong_required
+def convite_novo():
+    if not (tem_papel('pastor') or session.get('papel') == 'admin'):
+        abort(403)
+    with get_db() as conn:
+        _token_convite(conn, get_cong_id(), novo=True)
+    flash('Link de convite novo gerado. O link antigo deixou de valer.', 'success')
+    return redirect(url_for('configuracoes'))
+
+
+@app.route('/admin/codigo-pastores', methods=['POST'])
+@papel_required('admin')
+def admin_codigo_pastores():
+    with get_db() as conn:
+        _codigo_pastores(conn, novo=True)
+    flash('Código novo gerado. O link antigo dos pastores deixou de valer.', 'success')
+    return redirect(url_for('admin'))
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if session.get('user_id'):
@@ -650,11 +803,7 @@ def login():
                 if not u['senha_hash'].startswith(('pbkdf2:', 'scrypt:')):
                     conn.execute('UPDATE usuarios SET senha_hash=? WHERE id=?', (generate_password_hash(senha), u['id']))
                 conn.execute('DELETE FROM login_falhas WHERE chave=?', (chave,))
-                session.clear()
-                session.permanent = True
-                session.update(user_id=u['id'], user_nome=u['nome'], usuario=u['usuario'], papel=u['papel'],
-                               cong_id=u['cong_id'], cong_nome=cong['nome'] if cong else 'Tesouraria Nacional',
-                               is_admin=u['papel'] == 'admin')
+                _abrir_sessao(u, cong)
                 nxt = request.args.get('next', '')
                 if not nxt.startswith('/') or nxt.startswith('//'):
                     nxt = url_for('inicio')
@@ -1761,8 +1910,12 @@ def configuracoes():
              'fundo_local_pct': int(comp['fundo_local_pct']), 'betel': bool(comp['betel'])}
         exemplo = R.liquidar_dizimo(1000, c, reg)
     travado = bool(comp and comp['confirmado_em']) and papel != 'admin'
+    link_convite = None
+    if tem_papel('pastor') or papel == 'admin':
+        with get_db() as conn:
+            link_convite = url_for('convite', token=_token_convite(conn, cid), _external=True)
     return render_template('configuracoes.html', cfg=cfg, anos=ANOS, ano=ano, comp=comp, reg=reg, exemplo=exemplo,
-                           pode=pode, travado=travado, sm=sm, meses_base=meses_base)
+                           pode=pode, travado=travado, sm=sm, meses_base=meses_base, link_convite=link_convite)
 
 
 @app.route('/tutorial')
@@ -1999,8 +2152,8 @@ def nacional_auditoria():
 # ═════════════════════════════════════════════
 def _novo_usuario(conn, cid, nome, usuario, senha, papel):
     usuario = usuario.strip().lower()
-    if not usuario or not all(ch.isalnum() or ch in '-_.' for ch in usuario):
-        raise ValueError('Usuário: use letras minúsculas, números, ponto, - ou _.')
+    if not usuario or not all(ch.isalnum() or ch in '-_.@+' for ch in usuario):
+        raise ValueError('Usuário: use o seu e-mail, ou letras minúsculas, números, ponto, - ou _.')
     if len(senha) < 8:
         raise ValueError('A senha precisa ter pelo menos 8 caracteres.')
     dono = conn.execute('SELECT nome, papel FROM usuarios WHERE usuario=?', (usuario,)).fetchone()
@@ -2020,7 +2173,11 @@ def admin():
     por_cong = {}
     for u in users:
         por_cong.setdefault(u['cong_id'], []).append(u)
-    return render_template('admin.html', congs=congs, por_cong=por_cong, nacionais=por_cong.get(None, []), cfg=get_cfg())
+    with get_db() as conn:
+        codigo = _codigo_pastores(conn)
+    link_pastores = url_for('criar_acesso', c=codigo, _external=True)
+    return render_template('admin.html', congs=congs, por_cong=por_cong, nacionais=por_cong.get(None, []), cfg=get_cfg(),
+                           link_pastores=link_pastores)
 
 
 @app.route('/admin/nova', methods=['GET', 'POST'])

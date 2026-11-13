@@ -513,3 +513,35 @@ def test_cadastro_um_botao_salva_tudo(app):
     pag = r.get_data(as_text=True)
     assert 'Cadastro salvo' in pag and 'Pr. Davi' in pag and 'Um Botão/SP' in pag
     assert 'Em qual <b>livro</b>' in tes.get('/lancar?tipo=Saída').get_data(as_text=True)
+
+
+def test_autocadastro_pastor_e_convite_tesoureiro(app):
+    """Pastor cria congregação e acesso com o código; tesoureiro entra pelo link de convite."""
+    with appmod.get_db() as conn:
+        codigo = appmod._codigo_pastores(conn)
+    c = app.test_client()
+    r = c.post('/criar-acesso', data={'codigo': 'ERRADO', 'congregacao': 'Nova Vida/SP', 'nome': 'Pr. Elias',
+                                       'email': 'elias@ex.com', 'senha': 'pastor12345', 'senha2': 'pastor12345'})
+    assert 'Código inválido' in r.get_data(as_text=True)
+    r = c.post('/criar-acesso', data={'codigo': codigo, 'congregacao': 'Nova Vida/SP', 'nome': 'Pr. Elias',
+                                       'email': 'Elias@Ex.com', 'senha': 'pastor12345', 'senha2': 'pastor12345'})
+    assert r.status_code == 302 and '/configuracoes' in r.headers['Location']
+    pag = c.get('/configuracoes').get_data(as_text=True)
+    assert 'Convidar o tesoureiro' in pag and 'Pr. Elias' in pag
+    link = re.search(r'id="link-convite" value="([^"]+)"', pag).group(1)
+    token = link.rsplit('/', 1)[1]
+    # congregação repetida é recusada
+    r = app.test_client().post('/criar-acesso', data={'codigo': codigo, 'congregacao': 'nova vida/sp', 'nome': 'X',
+                                                      'email': 'x@ex.com', 'senha': 'pastor12345', 'senha2': 'pastor12345'})
+    assert 'já está cadastrada' in r.get_data(as_text=True)
+    # tesoureiro pelo convite
+    t = app.test_client()
+    r = t.post(f'/convite/{token}', data={'nome': 'Marta Silva', 'email': 'marta@ex.com', 'senha': 'tesour12345', 'senha2': 'tesour12345'})
+    assert r.status_code == 302
+    assert 'Marta Silva' in t.get('/configuracoes').get_data(as_text=True)
+    entrar(app, 'elias@ex.com', 'pastor12345')
+    entrar(app, 'marta@ex.com', 'tesour12345')
+    # link novo invalida o antigo
+    c.post('/convite-novo')
+    r = app.test_client().get(f'/convite/{token}')
+    assert r.status_code == 302 and '/login' in r.headers['Location']

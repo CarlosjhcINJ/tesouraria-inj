@@ -31,7 +31,7 @@
     <div class="modal-header"><h6 class="modal-title">Trocar nome ou usuário</h6><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
     <div class="modal-body">
       <label class="form-label small mb-0">Nome</label><input type="text" name="nome" class="form-control form-control-sm mb-2" value="{{ u['nome'] }}" required/>
-      <label class="form-label small mb-0">Usuário (para entrar)</label><input type="text" name="usuario" class="form-control form-control-sm" value="{{ u['usuario'] }}" required pattern="[a-z0-9._\-]+"/>
+      <label class="form-label small mb-0">Usuário (para entrar)</label><input type="text" name="usuario" class="form-control form-control-sm" value="{{ u['usuario'] }}" required pattern="[a-z0-9._@+\-]+"/>
       <div class="form-text">A senha não muda.</div>
     </div>
     <div class="modal-footer"><button type="button" class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancelar</button><button class="btn btn-sm btn-primary">Salvar</button></div>
@@ -46,6 +46,23 @@
     <p class="text-muted mb-0 small">Cada congregação tem o seu tesoureiro e o seu pastor, com acessos separados.</p>
   </div>
   <a href="{{ url_for('admin_nova_cong') }}" class="btn btn-primary-custom"><i class="bi bi-plus-circle me-2"></i>Nova congregação</a>
+</div>
+
+<div class="form-card mb-4" style="border-left:6px solid #198754">
+  <div class="fw-bold mb-1"><i class="bi bi-link-45deg me-1 text-success"></i>Link para os pastores criarem o próprio acesso</div>
+  <p class="small text-muted mb-2">Mande este link no grupo dos pastores. Cada pastor cadastra a congregação e o próprio acesso, sem esperar ninguém.
+    Dentro do sistema ele convida o tesoureiro com outro link. Você acompanha tudo aqui embaixo e pode desativar quem não for da região.</p>
+  <div class="input-group mb-2">
+    <input type="text" class="form-control" id="link-pastores" value="{{ link_pastores }}" readonly/>
+    <button class="btn btn-outline-secondary" type="button" onclick="navigator.clipboard.writeText(document.getElementById('link-pastores').value);this.innerHTML='Copiado ✔'"><i class="bi bi-clipboard me-1"></i>Copiar</button>
+  </div>
+  <div class="d-flex flex-wrap gap-2">
+    <a class="btn btn-success btn-sm" target="_blank" rel="noopener"
+       href="https://wa.me/?text={{ ('Paz do Senhor, pastores! Este é o link para criar o acesso de vocês à Tesouraria INJ: ' ~ link_pastores ~ ' — Cadastre a congregação, use o seu e-mail como usuário e, se você também é o tesoureiro, marque a opção. Depois convide o tesoureiro pelo link que aparece no cadastro.') | urlencode }}"><i class="bi bi-whatsapp me-1"></i>Enviar pelo WhatsApp</a>
+    <form method="POST" action="{{ url_for('admin_codigo_pastores') }}" onsubmit="return confirm('Gerar um código novo? O link antigo deixa de funcionar.')">
+      <button class="btn btn-outline-danger btn-sm"><i class="bi bi-arrow-repeat me-1"></i>Gerar código novo</button>
+    </form>
+  </div>
 </div>
 
 <div class="row g-4">
@@ -80,7 +97,7 @@
         <label class="form-label small">Congregação (tesoureiro e pastor)</label>
         <select name="cong_id" class="form-select form-select-sm mb-2"><option value="">—</option>{% for c in congs if c['ativo'] %}<option value="{{ c['id'] }}">{{ c['nome'] }}</option>{% endfor %}</select>
         <label class="form-label small">Nome</label><input type="text" name="nome" class="form-control form-control-sm mb-2" required/>
-        <label class="form-label small">Usuário</label><input type="text" name="usuario" class="form-control form-control-sm mb-2" required pattern="[a-z0-9._\-]+" title="Letras minúsculas, números, ponto, - ou _"/>
+        <label class="form-label small">Usuário</label><input type="text" name="usuario" class="form-control form-control-sm mb-2" required pattern="[a-z0-9._@+\-]+" title="Letras minúsculas, números, ponto, - ou _"/>
         <label class="form-label small">Senha inicial</label><input type="password" name="senha" class="form-control form-control-sm mb-3" required minlength="8"/>
         <button class="btn btn-primary-custom w-100 btn-sm">Criar usuário</button>
       </form>

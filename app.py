@@ -1000,6 +1000,13 @@ def lancamentos():
             mes, ano = request.form['mes'], int(request.form['ano'])
             if mes not in MESES:
                 raise ValueError('Mês inválido.')
+            forma = request.form.get('forma')
+            partes = [(valor, forma if forma in FORMAS else None)]
+            if forma == 'Dinheiro + Pix':
+                pix = parse_valor(request.form.get('valor_pix', '') or '0')
+                if not 0 < pix < valor:
+                    raise ValueError('Informe quanto entrou em Pix: tem que ser maior que zero e menor que o total.')
+                partes = [(round(valor - pix, 2), 'Dinheiro'), (pix, 'Pix')]
             anexo = _ler_anexo('anexo')
         except (ValueError, KeyError) as e:
             flash(str(e) if str(e) else 'Confira os campos do lançamento.', 'danger')
@@ -1011,16 +1018,21 @@ def lancamentos():
             if mes_travado(conn, cid, ano, mes):
                 flash(f'{mes.capitalize()}/{ano} já foi fechado. Peça ao pastor para reabrir o mês.', 'danger')
                 return redirect(url_for('lancamentos', ano=ano, mes=mes))
-            tid = conn.insert('''INSERT INTO transacoes (cong_id,livro,tipo,item,valor,mes,ano,data_registro,obs,forma,usuario_id,pessoa)
-                                 VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
-                              (cid, livro, tipo, item, valor, mes, ano,
-                               request.form.get('data_registro', datetime.now().strftime('%d/%m/%Y')),
-                               request.form.get('obs', '')[:300], request.form.get('forma') if request.form.get('forma') in FORMAS else None,
-                               session['user_id'], request.form.get('pessoa', '').strip()[:120] or None))
+            obs = request.form.get('obs', '')[:300]
+            tid = None
+            for v_parte, f_parte in partes:
+                obs_parte = obs if len(partes) == 1 else (f'{obs} · ' if obs else '') + f'parte em {f_parte} de {fmt_brl(valor)}'
+                novo = conn.insert('''INSERT INTO transacoes (cong_id,livro,tipo,item,valor,mes,ano,data_registro,obs,forma,usuario_id,pessoa)
+                                      VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
+                                   (cid, livro, tipo, item, v_parte, mes, ano,
+                                    request.form.get('data_registro', datetime.now().strftime('%d/%m/%Y')),
+                                    obs_parte[:300], f_parte, session['user_id'], request.form.get('pessoa', '').strip()[:120] or None))
+                tid = tid or novo
             if anexo:
                 conn.execute('INSERT INTO anexos (transacao_id, nome, tipo, dados) VALUES (?,?,?,?)',
                              (tid, anexo['nome'], anexo['tipo'], anexo['dados']))
-        msg = f'{tipo} de {fmt_brl(valor)} registrada: {item}.'
+        msg = f'{tipo} de {fmt_brl(valor)} registrada: {item}.' + (
+            f' Separada em dinheiro ({fmt_brl(partes[0][0])}) e Pix ({fmt_brl(partes[1][0])}).' if len(partes) == 2 else '')
         if tipo == 'Saída' and not anexo:
             msg += ' Falta anexar o comprovante da despesa (§ 95).'
             flash(msg, 'warning')
@@ -1547,10 +1559,13 @@ def fechamento_fechar():
         if not calc:
             flash(f'Falta a classificação de {ano}. Complete o 1º Cadastro da congregação (dízimos do ano anterior) antes de fechar o mês.', 'danger')
             return redirect(url_for('fechamento', ano=ano, mes=mes))
+        # sem esperar aprovação: o tesoureiro fecha e já deposita; o pastor acompanha e pode reabrir
         fid = conn.insert('INSERT INTO fechamentos (cong_id, ano, mes, status, calculo, total, fechado_por) VALUES (?,?,?,?,?,?,?)',
-                          (cid, ano, mes, 'fechado', json.dumps(calc, ensure_ascii=False), calc['total'], session['user_id']))
+                          (cid, ano, mes, 'aprovado', json.dumps(calc, ensure_ascii=False), calc['total'], session['user_id']))
+        conn.execute('UPDATE fechamentos SET aprovado_por=?, aprovado_em=CURRENT_TIMESTAMP WHERE id=?', (session['user_id'], fid))
         auditar(conn, 'fechamento.fechar', f'{MESES[mes - 1]}/{ano}', depois={'total': calc['total']})
-    flash('Mês fechado. Agora o pastor precisa aprovar o relatório.', 'success')
+    flash('Mês fechado. Agora deposite o valor e anexe o comprovante aqui mesmo: a Tesouraria Nacional recebe na hora, '
+          'sem precisar mandar por WhatsApp.', 'success')
     return redirect(url_for('fechamento', ano=ano, mes=mes))
 
 
@@ -1575,7 +1590,7 @@ def fechamento_comprovante(fid):
     cid = get_cong_id()
     with get_db() as conn:
         f = conn.execute('SELECT * FROM fechamentos WHERE id=? AND cong_id=?', (fid, cid)).fetchone()
-        if not f or f['status'] != 'aprovado':
+        if not f or f['status'] not in ('fechado', 'aprovado'):
             abort(400)
         try:
             valor = parse_valor(request.form['valor'])

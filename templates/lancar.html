@@ -137,8 +137,22 @@
         </div>
         <div class="col-md-6">
           <label class="form-label">Forma</label>
-          <select name="forma" class="form-select"><option value="">—</option>{% for fm in formas %}<option value="{{ fm }}">{{ fm }}</option>{% endfor %}</select>
+          <select name="forma" id="forma" class="form-select"><option value="">—</option>{% for fm in formas %}<option value="{{ fm }}">{{ fm }}</option>{% endfor %}
+            {% if tipo == 'Entrada' %}<option value="Dinheiro + Pix">Dinheiro + Pix (as duas)</option>{% endif %}</select>
         </div>
+        <div class="col-md-6" id="caixa-pix" style="display:none">
+          <label class="form-label">Quanto entrou em Pix?</label>
+          <div class="input-group"><span class="input-group-text">R$</span>
+            <input type="text" name="valor_pix" id="valor_pix" class="form-control" placeholder="0,00" inputmode="decimal"/></div>
+          <div class="form-text">O resto do valor fica como dinheiro. O sistema registra as duas partes separadas, para bater com o caixa e com o banco.</div>
+        </div>
+        <script>
+          (function () {
+            const f = document.getElementById('forma'), c = document.getElementById('caixa-pix'), v = document.getElementById('valor_pix');
+            function mostra() { const sim = f.value === 'Dinheiro + Pix'; c.style.display = sim ? '' : 'none'; v.required = sim; }
+            f.addEventListener('change', mostra); mostra();
+          })();
+        </script>
         <div class="col-12">
           <label class="form-label">Comprovante {% if tipo == 'Saída' %}<span class="text-danger">(obrigatório em saídas, § 95)</span>{% else %}<span class="text-muted fw-normal">(opcional)</span>{% endif %}</label>
           <input type="file" name="anexo" class="form-control" accept="application/pdf,image/jpeg,image/png,image/webp" capture="environment"/>

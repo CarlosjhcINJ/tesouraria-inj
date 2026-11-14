@@ -2418,7 +2418,7 @@ def nacional_livro_excel():
     NAVY = PatternFill('solid', fgColor='25307A')
     CLARO = PatternFill('solid', fgColor='E9EEFB')
     BR, B = Font(color='FFFFFF', bold=True), Font(bold=True)
-    MOEDA = '"R$" #,##0.00;[Red]-"R$" #,##0.00'
+    MOEDA = '"R$" #,##0.00;[Red]"R$" -#,##0.00'
     wb = openpyxl.Workbook()
 
     def matriz(ws, titulo, cab0, linhas):
@@ -2821,7 +2821,7 @@ def exportar_excel():
     CLARO = PatternFill('solid', fgColor='E9EEFB')
     BR = Font(color='FFFFFF', bold=True)
     B = Font(bold=True)
-    MOEDA = '"R$" #,##0.00;[Red]-"R$" #,##0.00'
+    MOEDA = '"R$" #,##0.00;[Red]"R$" -#,##0.00'
     fina = Side(style='thin', color='C9D1E3')
 
     def titulo(ws, texto, ncols):

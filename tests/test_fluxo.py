@@ -322,7 +322,7 @@ def test_recibo_configuracao_balanco_e_impressao(app):
     with appmod.get_db() as conn:
         did = conn.execute('SELECT id FROM dizimos ORDER BY id LIMIT 1').fetchone()['id']
     assert 'Dízimos' in tes.get(f'/recibo/dizimo/{did}').get_data(as_text=True)
-    assert tes.get('/recibo/lancamento/999999').status_code == 404
+    assert tes.get('/recibo/lancamento/999999').status_code == 302
     # livros, balanço e central de impressão
     ano = tes.get('/livro-do-mes?ano=2026&periodo=ano').get_data(as_text=True)
     assert 'LIVRO CAIXA DO ANO' in ano and 'Pr. Fulano de Tal' in ano and 'Conta de Luz' in ano
@@ -475,7 +475,7 @@ def test_privacidade_isolamento_e_inatividade(app):
     # tesoureiro de outra congregação não vê nada de Vila Ramos
     outro = entrar(app, 'pe.unico', 'pastor12345')
     for url in (f'/recibo/lancamento/{t_vr}', f'/recibo/dizimo/{d_vr}', f'/lancamentos/{t_vr}/anexo', f'/fechamento/{f_vr}/relatorio'):
-        assert outro.get(url).status_code == 404, url
+        assert outro.get(url).status_code == 302, url
     assert outro.get(f'/lancamentos/{t_vr}/editar').status_code == 302
     assert 'Vila Ramos' not in outro.get('/lancamentos?ano=2026').get_data(as_text=True)
     assert outro.get('/nacional').status_code in (302, 403)
@@ -778,3 +778,14 @@ def test_lembretes_semestrais():
     assert 'último mês' in R.lembretes_semestrais(7, {'dorcas': True})[0]
     assert R.lembretes_semestrais(12, {'dorcas': True, 'conquistadores': True}) == []
     assert 'fim de ano' in R.lembretes_semestrais(11, {})[0]
+
+
+def test_pagina_inexistente_volta_ao_inicio(app):
+    client = app.test_client()
+    r = client.get('/pagina-que-nao-existe')
+    assert r.status_code == 302 and '/login' in r.headers['Location']
+    assert client.get('/static/nao-existe.js').status_code == 404
+    with client.session_transaction() as s:
+        s['user_id'] = 1
+    r = client.get('/nao-existe')
+    assert r.status_code == 302 and r.headers['Location'].endswith('/inicio')

@@ -40,6 +40,7 @@ REGRAS_PADRAO = [
     ('min_invest_formada', 500.00, '2026-01-01'),
     ('min_invest_formacao', 300.00, '2026-01-01'),
     ('min_invest_projecao', 200.00, '2026-01-01'),
+    ('mes_investimento', 10, '2020-07-31'),
 ]
 
 REGRAS_ROTULOS = {
@@ -53,6 +54,7 @@ REGRAS_ROTULOS = {
     'min_invest_formada': 'Fundo de investimento mínimo: plenamente formada (R$)',
     'min_invest_formacao': 'Fundo de investimento mínimo: em formação (R$)',
     'min_invest_projecao': 'Fundo de investimento mínimo: em projeção (R$)',
+    'mes_investimento': 'Mês em que se cobra o fundo de investimento (1 a 12)',
 }
 
 # Linhas do Relatório Econômico e os itens de lançamento (livro Envios,
@@ -130,7 +132,7 @@ def liquidar_dizimo(bruto, comp, reg):
             'base_fl': base_fl, 'fundo_local': fundo_local, 'liquido': liquido}
 
 
-def fechar_mes(bruto, comp, envios, reg):
+def fechar_mes(bruto, comp, envios, reg, mes=None):
     """
     bruto: dízimo bruto do mês.
     comp: compromissos do ano (categoria, nivelacao, fundo_local_pct, betel).
@@ -167,7 +169,8 @@ def fechar_mes(bruto, comp, envios, reg):
     if falta:
         avisos.append(f"Obrigatório para {CATEGORIAS[comp['categoria']].lower()}: {', '.join(falta)}.")
     minimo = reg.get('min_invest_' + comp['categoria'], 0) or 0
-    if minimo and valores.get('investimento', 0) < minimo:
+    mes_inv = int(reg.get('mes_investimento') or 10)
+    if minimo and (mes is None or mes == mes_inv) and valores.get('investimento', 0) < minimo:
         valor_txt = f'{minimo:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
         avisos.append(f"Fundo de investimento abaixo do mínimo de R$ {valor_txt} (obrigatório, com tolerância).")
     if bruto <= 0:

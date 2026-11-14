@@ -28,8 +28,17 @@
 
   {% if ultimo %}
   <div class="alert alert-success d-flex align-items-center justify-content-between flex-wrap gap-2">
-    <span><i class="bi bi-check-circle-fill me-1"></i>Registrado: <b>{{ ultimo['item'] }}</b> · {{ ultimo['valor'] | brl }}{% if ultimo['pessoa'] %} · {{ ultimo['pessoa'] }}{% endif %}</span>
-    <a href="{{ url_for('recibo', tipo='lancamento', rid=ultimo['id']) }}" target="_blank" class="btn btn-sm btn-success"><i class="bi bi-receipt me-1"></i>Imprimir recibo</a>
+    <span><i class="bi bi-check-circle-fill me-1"></i>Registrado: <b>{{ ultimo['item'] }}</b> · {{ (ultimo['total_lote'] or ultimo['valor']) | brl }}{% if ultimo['pessoa'] %} · {{ ultimo['pessoa'] }}{% endif %}</span>
+    <span class="d-flex gap-2 flex-wrap">
+      {% if ultimo['tipo'] == 'Saída' and not ultimo['n_anexos'] %}
+      <form method="POST" action="{{ url_for('anexo_lancamento', tid=ultimo['id']) }}" enctype="multipart/form-data" class="d-inline">
+        <input type="hidden" name="voltar" value="lancar"/>
+        <label class="btn btn-sm btn-warning mb-0"><i class="bi bi-paperclip me-1"></i>Anexar comprovante agora
+          <input type="file" name="anexo" hidden accept="application/pdf,image/jpeg,image/png,image/webp" capture="environment" onchange="this.form.submit()"/></label>
+      </form>
+      {% endif %}
+      <a href="{{ url_for('recibo', tipo='lancamento', rid=ultimo['id']) }}" target="_blank" class="btn btn-sm btn-success"><i class="bi bi-receipt me-1"></i>Imprimir recibo</a>
+    </span>
   </div>
   {% endif %}
 
@@ -108,7 +117,7 @@
       </div>
       <button type="button" class="btn btn-sm btn-link" id="trocar">Trocar o tipo</button>
     </div>
-    <form method="POST" action="{{ url_for('lancamentos') }}" enctype="multipart/form-data">
+    <form method="POST" action="{{ url_for('lancamentos') }}" enctype="multipart/form-data" id="form-lancar">
       <input type="hidden" name="tipo" value="{{ tipo }}"/>
       <input type="hidden" name="livro" id="h-livro"/>
       <input type="hidden" name="item" id="h-item"/>
@@ -163,6 +172,13 @@
           <input type="text" name="obs" class="form-control" placeholder="Opcional"/>
         </div>
       </div>
+      {% if tipo == 'Saída' %}
+      <div class="alert alert-warning mt-3 mb-0" id="aviso-negativo" {% if not negativo %}hidden{% endif %}>
+        <div class="mb-2"><i class="bi bi-exclamation-triangle-fill me-1"></i><span id="aviso-negativo-txt">Esta saída deixa o livro negativo. Confira se não sobrou um zero no valor.</span></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" name="confirmo_negativo" value="1" id="confirmo_negativo">
+          <label class="form-check-label" for="confirmo_negativo">Confirmo: o valor está certo, mesmo deixando o saldo negativo.</label></div>
+      </div>
+      {% endif %}
       <button class="btn btn-lg w-100 mt-4 {{ 'btn-success' if tipo == 'Entrada' else 'btn-danger' }}"><i class="bi bi-check2-circle me-2"></i>Registrar {{ tipo | lower }}</button>
     </form>
   </div>
@@ -195,6 +211,39 @@
     passo(3, 'feito'); passo(4, 'atual');
     document.getElementById('valor').focus();
   }
+  // Saldo de cada livro, para avisar antes de deixar o livro negativo
+  const saldos = {{ saldos | tojson }}, nomes = {{ livro_nome | tojson }}, tipo = {{ tipo | tojson }};
+  const num = t => { t = (t || '').replace(/[R$\s]/g, ''); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); return parseFloat(t) || 0; };
+  const brl = v => v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+  const form = document.getElementById('form-lancar'), CHAVE = 'lancar-rascunho-' + tipo;
+  const campos = ['valor', 'data_registro', 'mes', 'ano', 'pessoa', 'forma', 'valor_pix', 'obs'];
+  form.addEventListener('submit', e => {
+    if (tipo === 'Saída') {
+      const lv = document.getElementById('h-livro').value, v = num(form.valor.value), sd = saldos[lv] || 0;
+      const chk = document.getElementById('confirmo_negativo');
+      if (v > sd + 0.005 && !chk.checked) {
+        e.preventDefault();
+        document.getElementById('aviso-negativo-txt').textContent =
+          `Esta saída de ${brl(v)} deixa o livro ${nomes[lv]} negativo (saldo atual ${brl(sd)}). Confira se não sobrou um zero no valor.`;
+        document.getElementById('aviso-negativo').hidden = false; chk.focus(); return;
+      }
+    }
+    // guarda o que foi digitado: se o servidor recusar, nada se perde
+    const r = {livro: document.getElementById('h-livro').value, item: document.getElementById('h-item').value,
+               rotulo: document.getElementById('f-livro').textContent.replace('Livro: ', '')};
+    campos.forEach(c => { if (form[c]) r[c] = form[c].value; });
+    try { sessionStorage.setItem(CHAVE, JSON.stringify(r)); } catch (_) {}
+  });
+  const qs = new URLSearchParams(location.search);
+  if (qs.get('restaurar')) {
+    let r = null; try { r = JSON.parse(sessionStorage.getItem(CHAVE)); } catch (_) {}
+    if (r && r.livro && r.item) {
+      abrir(r.livro, r.item, r.rotulo);
+      campos.forEach(c => { if (form[c] && r[c] !== undefined) form[c].value = r[c]; });
+      form.forma && form.forma.dispatchEvent(new Event('change'));
+    }
+  } else { try { sessionStorage.removeItem(CHAVE); } catch (_) {} }
+
   document.querySelectorAll('.livro-escolha').forEach(b => b.addEventListener('click', () => mostrarItens(b.dataset.livro)));
   document.querySelectorAll('.voltar-livros').forEach(b => b.addEventListener('click', mostrarLivros));
   document.querySelectorAll('.item-btn').forEach(b => b.addEventListener('click', () => abrir(b.dataset.livro, b.dataset.item, b.dataset.rotulo)));

@@ -63,6 +63,9 @@
         {% for a in calc.avisos %}
           <div class="alert alert-warning py-2 px-3 mt-3 mb-0 small"><i class="bi bi-exclamation-circle me-1"></i>{{ a }}</div>
         {% endfor %}
+        {% for a in calc.get('lembretes', []) %}
+          <div class="alert alert-info py-2 px-3 mt-3 mb-0 small"><i class="bi bi-bell me-1"></i>{{ a }}</div>
+        {% endfor %}
         {% if not f %}<p class="small text-muted mt-3 mb-0">O cálculo usa os dízimos e os lançamentos do livro “Envios” deste mês. Confira antes de fechar: depois de fechado, só o pastor reabre.</p>{% endif %}
       {% else %}
         <p class="text-muted mb-0">Sem carta anual, não há cálculo.</p>

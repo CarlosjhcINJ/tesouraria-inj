@@ -767,3 +767,14 @@ def test_fundo_investimento_so_em_outubro():
     aviso = lambda mes: any('investimento' in a for a in R.fechar_mes(5000, comp, {}, reg, mes)['avisos'])
     assert not aviso(5)
     assert aviso(10)
+
+
+def test_lembretes_semestrais():
+    import regras as R
+    assert R.lembretes_semestrais(3, {}) == []
+    assert 'Dorcas e Conquistadores' in R.lembretes_semestrais(5, {})[0]
+    l = R.lembretes_semestrais(6, {'dorcas': True})
+    assert 'Conquistadores' in l[0] and 'Dorcas' not in l[0]
+    assert 'último mês' in R.lembretes_semestrais(7, {'dorcas': True})[0]
+    assert R.lembretes_semestrais(12, {'dorcas': True, 'conquistadores': True}) == []
+    assert 'fim de ano' in R.lembretes_semestrais(11, {})[0]

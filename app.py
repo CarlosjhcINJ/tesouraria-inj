@@ -1723,7 +1723,19 @@ def calcular_mes(conn, cid, ano, mes):
     reg = regras_em(conn, f'{ano}-{mes:02d}-01')
     if not comp:
         return None, reg
-    return R.fechar_mes(float(bruto), comp, envios, reg, mes), reg
+    calc = R.fechar_mes(float(bruto), comp, envios, reg, mes)
+    sem = R.MESES_SEMESTRAIS.get(mes)
+    if sem:
+        periodo = [MESES[m - 1] for m in range(R.INICIO_SEMESTRAL[sem], mes + 1)]
+        marcas = ','.join('?' * len(periodo))
+        feitos = {}
+        for chave, (_, itens) in R.SEMESTRAIS.items():
+            t = conn.execute(f"""SELECT COALESCE(SUM(valor),0) AS t FROM transacoes WHERE cong_id=? AND ano=?
+                                 AND livro='Envios' AND tipo='Entrada' AND origem IS NULL AND item=? AND mes IN ({marcas})""",
+                             (cid, ano, itens[sem], *periodo)).fetchone()['t']
+            feitos[chave] = (t or 0) > 0
+        calc['lembretes'] = R.lembretes_semestrais(mes, feitos)
+    return calc, reg
 
 
 def _lancar_fechamento(conn, cid, f_id, ano, mes, calc):

@@ -691,3 +691,44 @@ def test_itens_repetidos_unificados(app):
     assert orc == [('Papelaria e Escritório', 150)]
     todos = [i for lv in appmod.CATEGORIAS.values() for t in lv.values() for i in t]
     assert 'Serviços Públicos (água, luz)' not in todos and 'Conta de Água' in todos and 'Conta de Luz' in todos
+
+
+def test_validacoes_da_equipe(app):
+    """Valor mínimo, formato ambíguo, datas impossíveis, ano inválido na URL e busca sem acento."""
+    import pytest
+    from app import parse_valor, validar_data
+    assert parse_valor('1.234,56') == 1234.56 and parse_valor('1234,5') == 1234.5 and parse_valor('85.50') == 85.5
+    assert parse_valor('1.500') == 1500
+    for ruim in ('1,234.56', '0,001', 'abc', '-5', '1.23.4'):
+        with pytest.raises(ValueError):
+            parse_valor(ruim, minimo=0.01)
+    for ruim in ('0', '0,00'):
+        with pytest.raises(ValueError):
+            parse_valor(ruim, minimo=0.01)
+    for ruim in ('31/02/2026', '99/99/9999', '14/11/2099'):
+        with pytest.raises(ValueError):
+            validar_data(ruim, 2026, 'novembro')
+    assert validar_data('5/11/2026', 2026, 'novembro')[0] == '05/11/2026'
+    assert validar_data('10/10/2026', 2026, 'novembro')[1]   # outro mês: aviso
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    tes = entrar(app, 'vr.tesouraria', 'tesoureiro123')
+    with appmod.get_db() as conn:
+        antes = conn.execute('SELECT COUNT(*) AS n FROM transacoes').fetchone()['n']
+    base = {'livro': 'Projetos', 'tipo': 'Entrada', 'item': 'Brechó', 'mes': 'março', 'ano': 2026, 'voltar': 'lancar'}
+    for valor, data in (('0,00', ''), ('0,001', ''), ('1,234.56', ''), ('10,00', '31/02/2026'), ('10,00', '14/11/2099')):
+        tes.post('/lancamentos', data={**base, 'valor': valor, 'data_registro': data})
+    with appmod.get_db() as conn:
+        assert conn.execute('SELECT COUNT(*) AS n FROM transacoes').fetchone()['n'] == antes
+    # ano inválido na URL não derruba a página
+    for url in ('/relatorio?ano=abc', '/lancamentos?ano=abc', '/?ano=99999&mes=xx', '/balanco?ano=abc&mes=zz',
+                '/orcamento?ano=abc', '/dizimos?ano=abc', '/livro-do-mes?ano=abc&mes=13'):
+        assert tes.get(url).status_code == 200, url
+    # busca sem diferenciar maiúscula/acento, em item, pessoa e observação; totais seguem a busca
+    tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Saída', 'item': 'Conta de Luz', 'valor': '77,00',
+                                   'mes': 'março', 'ano': 2026, 'pessoa': 'Énel Distribuição', 'confirmo_negativo': '1'})
+    for termo in ('luz', 'LUZ', 'enel', 'distribuicao'):
+        pag = tes.get(f'/relatorio?ano=2026&item={termo}').get_data(as_text=True)
+        assert 'R$ 77,00' in pag, termo
+    pag = tes.get('/relatorio?ano=2026&item=enel').get_data(as_text=True)
+    assert 'Brechó' not in pag

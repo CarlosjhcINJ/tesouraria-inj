@@ -732,3 +732,20 @@ def test_validacoes_da_equipe(app):
         assert 'R$ 77,00' in pag, termo
     pag = tes.get('/relatorio?ano=2026&item=enel').get_data(as_text=True)
     assert 'Brechó' not in pag
+
+
+def test_valor_minimo_cinco_centavos(app):
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    tes = entrar(app, 'vr.tesouraria', 'tesoureiro123')
+    def conta():
+        with appmod.get_db() as conn:
+            return conn.execute('SELECT COUNT(*) AS n FROM transacoes').fetchone()['n']
+    base = {'livro': 'FundoLocal', 'tipo': 'Entrada', 'mes': 'março', 'ano': 2026}
+    n = conta()
+    tes.post('/lancamentos', data={**base, 'item': 'Oferta de Música', 'valor': '0,04'})
+    assert conta() == n
+    tes.post('/lancamentos', data={**base, 'item': 'Oferta de Música', 'valor': '0,05'})
+    assert conta() == n + 1
+    tes.post('/lancamentos', data={**base, 'item': 'Rendimentos Bancários', 'valor': '0,02'})
+    assert conta() == n + 2

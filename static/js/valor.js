@@ -23,15 +23,16 @@
         inp.setCustomValidity('Escreva como 1.234,56');
         d.className = 'form-text dica-valor text-danger';
         d.textContent = 'Não entendi o valor. Escreva como 1.234,56 (ponto nos milhares, vírgula nos centavos).';
-      } else if (v < 0.01) {
-        inp.setCustomValidity('Mínimo R$ 0,01');
-        d.className = 'form-text dica-valor text-danger'; d.textContent = 'O valor precisa ser de pelo menos R$ 0,01.';
+      } else if (v < Number(inp.dataset.minimo || 0.05)) {
+        const min = brl(Number(inp.dataset.minimo || 0.05));
+        inp.setCustomValidity('Mínimo ' + min);
+        d.className = 'form-text dica-valor text-danger'; d.textContent = 'O valor precisa ser de pelo menos ' + min + '.';
       } else {
         inp.setCustomValidity('');
         d.className = 'form-text dica-valor text-success fw-semibold'; d.textContent = 'Será registrado: ' + brl(v);
       }
     };
-    inp.addEventListener('input', atualizar); atualizar();
+    inp.addEventListener('input', atualizar); inp.addEventListener('revalidar', atualizar); atualizar();
   });
   document.querySelectorAll('input[data-data]').forEach(inp => {
     const atualizar = () => {

@@ -146,7 +146,7 @@ def test_fluxo_completo(app):
     itens = {g['item']: g['valor'] for g in gerados}
     assert itens['Envio Dízimo dos Dízimos 10%'] == 773.65
     assert itens['Aporte ao fundo local'] == 189.39  # fundo local residual: 3% de (bruto − DD − nivelação − Betel)
-    assert itens['Sustento pastoral (§ 66)'] == 6123.57
+    assert itens['Sustento pastoral'] == 6123.57
 
     # relatório econômico e comprovante
     rel = tes.get(f"/fechamento/{f['id']}/relatorio").get_data(as_text=True)
@@ -381,7 +381,7 @@ def test_itens_completos_e_nomes_antigos(app):
                  'Of. Jovens Miss. Fim Ano', 'Of. Distrital', 'Sócio Missionário', 'Fundo de Investimento'):
         assert item in appmod.CATEGORIAS['Envios']['Entrada']
     saidas_orc = [i for _, its in appmod.ORC_GRUPOS['Saída'] for i in its]
-    assert 'Envio: Raios de Luz' in saidas_orc and 'Sustento pastoral (§ 66)' in saidas_orc
+    assert 'Envio: Raios de Luz' in saidas_orc and 'Sustento pastoral' in saidas_orc
     # nome antigo vira o atual
     with appmod.get_db() as conn:
         conn.execute("INSERT INTO transacoes (cong_id,livro,tipo,item,valor,mes,ano) VALUES (1,'FundoLocal','Saída','Aluguel Salão',10,'janeiro',2026)")

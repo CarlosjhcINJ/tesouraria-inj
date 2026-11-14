@@ -165,7 +165,7 @@ def fechar_mes(bruto, comp, envios, reg):
         if not valores.get('safras'):
             falta.append('Safras para Cristo')
     if falta:
-        avisos.append(f"Obrigatório para {CATEGORIAS[comp['categoria']].lower()}: {', '.join(falta)} (Art. 13).")
+        avisos.append(f"Obrigatório para {CATEGORIAS[comp['categoria']].lower()}: {', '.join(falta)}.")
     minimo = reg.get('min_invest_' + comp['categoria'], 0) or 0
     if minimo and valores.get('investimento', 0) < minimo:
         valor_txt = f'{minimo:,.2f}'.replace(',', 'X').replace('.', ',').replace('X', '.')
@@ -212,7 +212,7 @@ def texto_carta(nome_cong, ano, c):
     p2 = (f"Após enviar o Dízimo dos Dízimos à Tesouraria Nacional, a congregação fará mensalmente o aporte de "
           f"{c['fundo_local_pct']}% da entrada de dízimos do mês ao fundo local, calculado à razão de 1% para cada "
           f"salário mínimo contido na média mensal do ano anterior, descontado o Dízimo dos Dízimos. "
-          f"Os envios devem ser feitos até o dia 5 de cada mês (§ 80).")
+          f"Os envios devem ser feitos até o dia 5 de cada mês.")
     return p1, p2
 
 

@@ -67,7 +67,7 @@ def _orc_grupos():
                     g('Entrada', 'Projetos', CATEGORIAS['Projetos']['Entrada']),
                     g('Entrada', 'Envios (ofertas que vão para a nacional)', CATEGORIAS['Envios']['Entrada'])],
         'Saída': [g('Saída', 'Liquidação dos dízimos (automático)', ['Envio Dízimo dos Dízimos 10%', 'Envio Nivelação 5%',
-                                                                     'Envio Betel 4%', 'Sustento pastoral (§ 66)']),
+                                                                     'Envio Betel 4%', 'Sustento pastoral']),
                   g('Saída', 'Envios à nacional e à região (automático no fechamento)', envios_nac),
                   g('Saída', 'Caixa local', CATEGORIAS['FundoLocal']['Saída']),
                   g('Saída', 'Projetos', CATEGORIAS['Projetos']['Saída'])],
@@ -343,6 +343,7 @@ ITENS_UNIFICADOS = [
     (None, 'Saída', 'Outros Fundo Local', 'Outras Despesas'),
     (None, 'Saída', 'Vários', 'Outras Despesas'),
     ('Projetos', 'Entrada', 'Votos', 'Votos para Projetos'),
+    (None, 'Saída', 'Sustento pastoral (§ 66)', 'Sustento pastoral'),
 ]
 # Nomes que não se oferecem mais, mas continuam válidos nos lançamentos antigos (não dá para separar sozinho)
 ITENS_LEGADO = {'Serviços Públicos (água, luz)': 'antigo: use Conta de Água ou Conta de Luz',
@@ -1741,7 +1742,7 @@ def _lancar_fechamento(conn, cid, f_id, ano, mes, calc):
         linhas.append(('LiqDízimos', 'Saída', 'Aporte ao fundo local', liq['fundo_local'], 1))
         linhas.append(('FundoLocal', 'Entrada', 'Aporte da liquidação de dízimos', liq['fundo_local'], 1))
     if liq['liquido']:
-        linhas.append(('LiqDízimos', 'Saída', 'Sustento pastoral (§ 66)', liq['liquido'], 0))
+        linhas.append(('LiqDízimos', 'Saída', 'Sustento pastoral', liq['liquido'], 0))
     for l in calc['nacional'] + calc['distrital']:
         if l['chave'] in ('dd', 'nivelacao', 'betel') or not l['valor']:
             continue
@@ -1852,7 +1853,7 @@ def fechamento_comprovante(fid):
         reg = regras_em(conn)
     limite = R.prazo_envio(f['ano'], f['mes'], int(reg.get('prazo_dia', 5)))
     if data_dep > limite:
-        flash(f'Comprovante confere e o mês está travado. Atenção: o depósito saiu depois do prazo de {limite:%d/%m} (§ 80).', 'warning')
+        flash(f'Comprovante confere e o mês está travado. Atenção: o depósito saiu depois do prazo de {limite:%d/%m}.', 'warning')
     else:
         flash('Comprovante confere. O mês está travado e o envio foi registrado.', 'success')
     return redirect(url_for('fechamento', ano=f['ano'], mes=f['mes']))

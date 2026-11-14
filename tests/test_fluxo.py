@@ -749,3 +749,11 @@ def test_valor_minimo_cinco_centavos(app):
     assert conta() == n + 1
     tes.post('/lancamentos', data={**base, 'item': 'Rendimentos Bancários', 'valor': '0,02'})
     assert conta() == n + 2
+
+
+def test_forma_no_recibo():
+    import app as A
+    assert A.forma_recibo('dinheiro R$ 25,00 + pix R$ 75,00') == 'Dinheiro R$ 25,00 + PIX R$ 75,00'
+    assert A.forma_recibo('Pix') == 'PIX'
+    assert A.forma_recibo('Transferência') == 'Transferência'
+    assert A.forma_recibo('') == ''

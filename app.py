@@ -604,6 +604,22 @@ VALOR_MINIMO = 0.05
 ITENS_CENTAVOS = {'Rendimentos Bancários', 'Tarifas Bancárias'}
 
 
+def forma_recibo(txt):
+    """Forma de pagamento no recibo: 'Dinheiro R$ 25,00 + PIX R$ 75,00'."""
+    partes = []
+    for p in (txt or '').split(' + '):
+        p = p.strip()
+        p = re.sub(r'(?i)\bpix\b', 'PIX', p)
+        p = re.sub(r'(?i)\br\$', 'R$', p)
+        if p and p[0].islower():
+            p = p[0].upper() + p[1:]
+        partes.append(p)
+    return ' + '.join(partes)
+
+
+app.jinja_env.filters['forma_recibo'] = forma_recibo
+
+
 def minimo_do_item(item):
     return 0.01 if item in ITENS_CENTAVOS else VALOR_MINIMO
 

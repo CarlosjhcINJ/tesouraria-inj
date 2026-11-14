@@ -34,7 +34,7 @@
 </style>
 </head>
 <body>
-<div class="acoes"><a href="javascript:history.back()">Voltar</a><button onclick="window.print()">Imprimir recibo</button></div>
+<div class="acoes"><a href="{{ url_for('lancamentos') }}" onclick="return voltarRecibo(this)">Voltar</a><button onclick="window.print()">Imprimir recibo</button></div>
 {% for via in ['Via da igreja', 'Via de quem ' ~ ('entregou' if r.entrada else 'recebeu')] %}
 <div class="via {{ 'e' if r.entrada else 's' }}">
   <div class="topo">
@@ -51,10 +51,10 @@
 
   {% if r.entrada %}
   <div class="linha">Recebemos de <b>{{ r.pessoa or '_______________________________________' }}</b>
-    a importância acima, referente a <b>{{ r.referente }}</b>{% if r.forma %}, em <b>{{ r.forma | lower }}</b>{% endif %}.</div>
+    a importância acima, referente a <b>{{ r.referente }}</b>{% if r.forma %}, em <b>{{ r.forma | forma_recibo }}</b>{% endif %}.</div>
   {% else %}
   <div class="linha">Eu, <b>{{ r.pessoa or '_______________________________________' }}</b>, recebi da Igreja do Nome de Jesus — {{ cong['nome'] }}
-    a importância acima, referente a <b>{{ r.referente }}</b>{% if r.forma %}, em <b>{{ r.forma | lower }}</b>{% endif %}.</div>
+    a importância acima, referente a <b>{{ r.referente }}</b>{% if r.forma %}, em <b>{{ r.forma | forma_recibo }}</b>{% endif %}.</div>
   {% endif %}
   {% if r.obs %}<div class="linha">Observação: {{ r.obs }}</div>{% endif %}
   <div class="linha">Data: <b>{{ r.data or now().strftime('%d/%m/%Y') }}</b></div>
@@ -72,5 +72,18 @@
 </div>
 {% if loop.first %}<div class="corte">✂ recorte aqui</div>{% endif %}
 {% endfor %}
+<script>
+function voltarRecibo(a){
+  // Aberto em aba nova (o normal): fecha a aba e volta para a tela de onde veio.
+  if (window.opener || history.length <= 1) {
+    window.close();
+    // Se o navegador não deixar fechar, vai para os lançamentos.
+    setTimeout(function(){ location.href = a.href; }, 300);
+    return false;
+  }
+  history.back();
+  return false;
+}
+</script>
 </body>
 </html>

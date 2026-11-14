@@ -217,7 +217,7 @@
   // Saldo de cada livro, para avisar antes de deixar o livro negativo
   const saldos = {{ saldos | tojson }}, nomes = {{ livro_nome | tojson }}, tipo = {{ tipo | tojson }};
   const num = t => { t = (t || '').replace(/[R$\s]/g, ''); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); return parseFloat(t) || 0; };
-  const brl = v => v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+  const brl = v => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   const form = document.getElementById('form-lancar'), CHAVE = 'lancar-rascunho-' + tipo;
   const campos = ['valor', 'data_registro', 'mes', 'ano', 'pessoa', 'forma', 'valor_pix', 'obs'];
   form.addEventListener('submit', e => {

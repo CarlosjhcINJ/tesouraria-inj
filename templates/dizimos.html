@@ -153,7 +153,7 @@
     const comp = {{ (comp or {'categoria':'nova','nivelacao':false,'fundo_local_pct':0,'betel':false}) | tojson }};
     const dd = {{ reg.get('pct_dizimo_dizimos', 0.10) }}, niv = {{ reg.get('pct_nivelacao', 0.05) }}, betel = {{ reg.get('pct_betel', 0.04) }};
     const r2 = v => Math.round(v * 100) / 100;
-    const brl = v => v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+    const brl = v => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
     const el = id => document.getElementById(id);
     const ler = v => { let t = (v || '').replace(/[^\d.,]/g, '');
       if (/^\d+\.\d{1,2}$/.test(t)) return parseFloat(t) || 0;

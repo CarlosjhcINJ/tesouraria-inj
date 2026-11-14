@@ -8,7 +8,7 @@
     if (RE_PONTO.test(t)) return Number(t);
     return NaN;
   }
-  const brl = v => v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
+  const brl = v => 'R$ ' + v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2});
   function dica(inp) {
     const ancora = inp.closest('.input-group') || inp;
     let d = ancora.nextElementSibling;

@@ -14,6 +14,7 @@ administrativas de 29/10/2026:
 - Prazo do envio: dia 5 do mês seguinte (§ 80).
 """
 from datetime import date
+from decimal import Decimal, ROUND_HALF_UP
 
 MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
          'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
@@ -80,8 +81,28 @@ LINHAS_DISTRITAL = [
 ITENS_ENVIO = sorted({i for _, _, its in LINHAS_NACIONAL + LINHAS_DISTRITAL for i in its})
 
 
+CENTAVO = Decimal('0.01')
+
+
+def D(v):
+    """Número como Decimal exato (float passa pelo texto: 0.1 vira 0.1, não 0.1000000000000000055)."""
+    if isinstance(v, Decimal):
+        return v
+    return Decimal(str(v if v is not None else 0))
+
+
+def centavos(v):
+    """Decimal arredondado aos centavos, meio para cima (123,455 -> 123,46)."""
+    return D(v).quantize(CENTAVO, rounding=ROUND_HALF_UP)
+
+
 def r2(v):
-    return round(float(v) + 1e-9, 2) if v >= 0 else round(float(v) - 1e-9, 2)
+    return float(centavos(v))
+
+
+def soma(valores):
+    """Soma exata em Decimal, devolvida aos centavos."""
+    return float(sum((D(v) for v in valores), Decimal(0)).quantize(CENTAVO, rounding=ROUND_HALF_UP))
 
 
 def mes_num(nome):
@@ -99,7 +120,7 @@ def classificar(media, sm, fator_formacao):
 def carta_anual(valores_mensais, sm, reg):
     """valores_mensais: dízimo bruto de cada mês da janela (0 = sem lançamento)."""
     vals = [v for v in valores_mensais if v and v > 0]
-    total = sum(vals)
+    total = soma(vals)
     n = len(vals)
     media = total / n if n else 0.0
     if n == 0:
@@ -119,17 +140,18 @@ def carta_anual(valores_mensais, sm, reg):
 
 
 def liquidar_dizimo(bruto, comp, reg):
-    """Divide o dízimo bruto do mês conforme os compromissos do ano."""
-    dd = r2(bruto * reg['pct_dizimo_dizimos'])
-    niv = r2(bruto * reg['pct_nivelacao']) if comp['nivelacao'] else 0.0
-    base_betel = r2(bruto - dd - niv)
-    betel = r2(base_betel * reg['pct_betel']) if comp['betel'] else 0.0
+    """Divide o dízimo bruto do mês conforme os compromissos do ano. Contas em Decimal, centavo a centavo."""
+    b = centavos(bruto)
+    dd = centavos(b * D(reg['pct_dizimo_dizimos']))
+    niv = centavos(b * D(reg['pct_nivelacao'])) if comp['nivelacao'] else Decimal('0.00')
+    base_betel = b - dd - niv
+    betel = centavos(base_betel * D(reg['pct_betel'])) if comp['betel'] else Decimal('0.00')
     # Fundo local: residual. O % do ano incide sobre o que sobra depois do Dízimo dos Dízimos, da Nivelação e do Betel.
-    base_fl = r2(base_betel - betel)
-    fundo_local = r2(base_fl * comp['fundo_local_pct'] / 100)
-    liquido = r2(bruto - dd - niv - betel - fundo_local)
-    return {'bruto': r2(bruto), 'dd': dd, 'niv': niv, 'base_betel': base_betel, 'betel': betel,
-            'base_fl': base_fl, 'fundo_local': fundo_local, 'liquido': liquido}
+    base_fl = base_betel - betel
+    fundo_local = centavos(base_fl * D(comp['fundo_local_pct']) / 100)
+    liquido = b - dd - niv - betel - fundo_local
+    return {k: float(v) for k, v in {'bruto': b, 'dd': dd, 'niv': niv, 'base_betel': base_betel, 'betel': betel,
+                                      'base_fl': base_fl, 'fundo_local': fundo_local, 'liquido': liquido}.items()}
 
 
 # Ofertas semestrais: um departamento em maio, o outro em junho (julho fica para quem não
@@ -166,7 +188,7 @@ def fechar_mes(bruto, comp, envios, reg, mes=None):
     Devolve o cálculo completo e as linhas do Relatório Econômico.
     """
     liq = liquidar_dizimo(bruto, comp, reg)
-    soma = lambda itens: r2(sum(envios.get(i, 0) for i in itens))
+    somar = lambda itens: soma(envios.get(i, 0) for i in itens)
 
     nacional = [
         {'chave': 'dd', 'rotulo': 'Dízimo dos Dízimos 10%', 'valor': liq['dd'], 'base': liq['bruto']},
@@ -174,13 +196,13 @@ def fechar_mes(bruto, comp, envios, reg, mes=None):
          'base': liq['bruto'] if comp['nivelacao'] else None},
     ]
     for chave, rotulo, itens in LINHAS_NACIONAL:
-        nacional.append({'chave': chave, 'rotulo': rotulo, 'valor': soma(itens), 'base': None})
+        nacional.append({'chave': chave, 'rotulo': rotulo, 'valor': somar(itens), 'base': None})
     nacional.insert(-1, {'chave': 'betel', 'rotulo': 'Associação de Pastores Betel 4%', 'valor': liq['betel'],
                          'base': liq['base_betel'] if comp['betel'] else None})
-    distrital = [{'chave': c, 'rotulo': r, 'valor': soma(i), 'base': None} for c, r, i in LINHAS_DISTRITAL]
+    distrital = [{'chave': c, 'rotulo': r, 'valor': somar(i), 'base': None} for c, r, i in LINHAS_DISTRITAL]
 
-    tot_nac = r2(sum(l['valor'] for l in nacional))
-    tot_dist = r2(sum(l['valor'] for l in distrital))
+    tot_nac = soma(l['valor'] for l in nacional)
+    tot_dist = soma(l['valor'] for l in distrital)
     valores = {l['chave']: l['valor'] for l in nacional + distrital}
 
     avisos = []
@@ -204,7 +226,7 @@ def fechar_mes(bruto, comp, envios, reg, mes=None):
 
     return {
         'liquidacao': liq, 'nacional': nacional, 'distrital': distrital,
-        'total_nacional': tot_nac, 'total_distrital': tot_dist, 'total': r2(tot_nac + tot_dist),
+        'total_nacional': tot_nac, 'total_distrital': tot_dist, 'total': soma([tot_nac, tot_dist]),
         'compromisso': dict(comp), 'avisos': avisos,
     }
 

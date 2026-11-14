@@ -100,7 +100,7 @@
         </div>
 
         <div class="mb-3">
-          <label class="form-label">Comprovante <span class="text-muted fw-normal">(obrigatório em saídas, § 95)</span></label>
+          <label class="form-label">Comprovante <span class="text-muted fw-normal">(obrigatório em saídas)</span></label>
           <input type="file" name="anexo" class="form-control" accept="application/pdf,image/jpeg,image/png,image/webp"/>
           <div class="form-text">Foto (JPG ou PNG) ou PDF até 2 MB. As fotos são reduzidas automaticamente.</div>
         </div>
@@ -208,7 +208,7 @@
                 {% if t['origem'] %}<span class="badge bg-light text-secondary border ms-1" title="Gerado pelo fechamento do mês">fechamento</span>{% endif %}
                 {% if t['transferencia'] %}<span class="badge bg-light text-secondary border ms-1" title="Transferência entre livros: não conta como receita nem despesa">transferência</span>{% endif %}
                 {% if t['n_anexos'] %}<a href="{{ url_for('anexo_lancamento', tid=t['id']) }}" target="_blank" class="ms-1" title="Ver comprovante"><i class="bi bi-paperclip"></i></a>
-                {% elif t['tipo'] == 'Saída' and not t['origem'] %}<span class="badge bg-warning-subtle text-warning-emphasis ms-1" title="Despesa sem comprovante (§ 95)">sem comprovante</span>{% endif %}
+                {% elif t['tipo'] == 'Saída' and not t['origem'] %}<span class="badge bg-warning-subtle text-warning-emphasis ms-1" title="Despesa sem comprovante">sem comprovante</span>{% endif %}
               </td>
               <td class="text-end fw-semibold {% if t['tipo']=='Entrada' %}text-entrada{% else %}text-saida{% endif %}">
                 {{ t['valor'] | brl }}

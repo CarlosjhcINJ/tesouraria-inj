@@ -132,6 +132,32 @@ def liquidar_dizimo(bruto, comp, reg):
             'base_fl': base_fl, 'fundo_local': fundo_local, 'liquido': liquido}
 
 
+# Ofertas semestrais: um departamento em maio, o outro em junho (julho fica para quem não
+# conseguiu em junho); no fim do ano, novembro e dezembro. Lembrete, não obrigação.
+SEMESTRAIS = {
+    'dorcas': ('Dorcas', {1: 'Of. Damas Miss. Metade Ano', 2: 'Of. Damas Miss. Fim Ano'}),
+    'conquistadores': ('Conquistadores', {1: 'Of. Jovens Miss. Metade Ano', 2: 'Of. Jovens Miss. Fim Ano'}),
+}
+MESES_SEMESTRAIS = {5: 1, 6: 1, 7: 1, 11: 2, 12: 2}
+INICIO_SEMESTRAL = {1: 5, 2: 11}
+
+
+def lembretes_semestrais(mes, feitos):
+    """mes: 1-12. feitos: {'dorcas': bool, 'conquistadores': bool} já lançados no período do semestre."""
+    sem = MESES_SEMESTRAIS.get(mes)
+    if not sem:
+        return []
+    faltam = [nome for chave, (nome, _) in SEMESTRAIS.items() if not feitos.get(chave)]
+    if not faltam:
+        return []
+    quem = ' e '.join(faltam)
+    if mes == 7:
+        return [f'Julho é o último mês para a oferta semestral de {quem} de metade do ano (para quem não conseguiu em junho).']
+    if sem == 1:
+        return [f'Mês das ofertas semestrais (maio e junho). Ainda não lançada: {quem}.']
+    return [f'Mês das ofertas semestrais de fim de ano (novembro e dezembro). Ainda não lançada: {quem}.']
+
+
 def fechar_mes(bruto, comp, envios, reg, mes=None):
     """
     bruto: dízimo bruto do mês.

@@ -10,6 +10,9 @@ ON CONFLICT (aceito pelos dois bancos). Esta camada faz a tradução.
 import os
 import re
 import sqlite3
+from decimal import Decimal
+
+sqlite3.register_adapter(Decimal, float)
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
@@ -56,6 +59,14 @@ def _pg_sql(sql):
     return ''.join(out)
 
 
+def _row(r):
+    """No Postgres os valores vêm de NUMERIC(14,2) como Decimal exato; o resto do sistema recebe o mesmo
+    valor em float (já exato aos centavos) para telas, gráficos e JSON."""
+    if not IS_PG:
+        return Row(dict(r))
+    return Row({k: (float(v) if isinstance(v, Decimal) else v) for k, v in r.items()})
+
+
 class Cursor:
     def __init__(self, cur):
         self._cur = cur
@@ -64,11 +75,10 @@ class Cursor:
         r = self._cur.fetchone()
         if r is None:
             return None
-        return Row(r) if IS_PG else Row(dict(r))
+        return _row(r)
 
     def fetchall(self):
-        rows = self._cur.fetchall()
-        return [Row(r) if IS_PG else Row(dict(r)) for r in rows]
+        return [_row(r) for r in self._cur.fetchall()]
 
     @property
     def rowcount(self):
@@ -130,6 +140,8 @@ def connect():
 # Tipos que mudam entre os bancos
 PK = 'SERIAL PRIMARY KEY' if IS_PG else 'INTEGER PRIMARY KEY AUTOINCREMENT'
 BLOB = 'BYTEA' if IS_PG else 'BLOB'
+# Dinheiro: exato no Postgres (NUMERIC com 2 casas). O SQLite (só uso local/testes) não tem decimal.
+MONEY = 'NUMERIC(14,2)' if IS_PG else 'REAL'
 NOW = 'CURRENT_TIMESTAMP'
 
 

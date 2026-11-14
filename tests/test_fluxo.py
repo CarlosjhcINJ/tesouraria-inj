@@ -789,3 +789,15 @@ def test_pagina_inexistente_volta_ao_inicio(app):
         s['user_id'] = 1
     r = client.get('/nao-existe')
     assert r.status_code == 302 and r.headers['Location'].endswith('/inicio')
+
+
+def test_dinheiro_em_decimal():
+    import regras as R
+    import app as A
+    # 10% de 1.234,55 = 123,455 -> 123,46 (meio para cima, sem erro de float)
+    reg = {'pct_dizimo_dizimos': 0.10, 'pct_nivelacao': 0.05, 'pct_betel': 0.04}
+    liq = R.liquidar_dizimo(1234.55, {'nivelacao': 0, 'betel': 0, 'fundo_local_pct': 0}, reg)
+    assert liq['dd'] == 123.46 and liq['liquido'] == 1111.09
+    assert R.soma([0.1] * 10) == 1.0 and R.soma([1234567.89, 0.01]) == 1234567.9
+    assert A.parse_valor('9.999.999,99') == 9999999.99 and A.parse_valor('1.234.567,89') == 1234567.89
+    assert A.fmt_brl(9999999.99) == 'R$ 9.999.999,99' and A.fmt_brl(-3672.19) == 'R$ -3.672,19'

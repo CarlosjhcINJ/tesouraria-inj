@@ -168,7 +168,7 @@ def _add_col(conn, table, col, ddl):
 
 def init_db():
     conn = get_db()
-    PK, BLOB = db.PK, db.BLOB
+    PK, BLOB, MONEY = db.PK, db.BLOB, db.MONEY
     stmts = [
         f'''CREATE TABLE IF NOT EXISTS congregacoes (
             id {PK}, nome TEXT NOT NULL, ativo INTEGER DEFAULT 1,
@@ -184,16 +184,16 @@ def init_db():
         '''CREATE TABLE IF NOT EXISTS config_nacional (key TEXT PRIMARY KEY, value TEXT)''',
         f'''CREATE TABLE IF NOT EXISTS transacoes (
             id {PK}, cong_id INTEGER NOT NULL, livro TEXT NOT NULL, tipo TEXT NOT NULL,
-            item TEXT NOT NULL, valor REAL NOT NULL, mes TEXT NOT NULL, ano INTEGER NOT NULL,
+            item TEXT NOT NULL, valor {MONEY} NOT NULL, mes TEXT NOT NULL, ano INTEGER NOT NULL,
             data_registro TEXT, obs TEXT, created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''',
         f'''CREATE TABLE IF NOT EXISTS orcamento (
             id {PK}, cong_id INTEGER NOT NULL, item TEXT NOT NULL, tipo TEXT NOT NULL,
-            orcam_ano REAL DEFAULT 0, orcam_mes REAL DEFAULT 0, observacao TEXT, ano INTEGER NOT NULL,
+            orcam_ano {MONEY} DEFAULT 0, orcam_mes {MONEY} DEFAULT 0, observacao TEXT, ano INTEGER NOT NULL,
             UNIQUE(cong_id, item, tipo, ano))''',
         f'''CREATE TABLE IF NOT EXISTS dizimos (
-            id {PK}, cong_id INTEGER NOT NULL, dizimo_bruto REAL NOT NULL,
+            id {PK}, cong_id INTEGER NOT NULL, dizimo_bruto {MONEY} NOT NULL,
             pct_nacional REAL DEFAULT 0, pct_fundo_local REAL DEFAULT 0,
-            valor_nacional REAL, valor_fundo_local REAL, valor_liquido REAL,
+            valor_nacional {MONEY}, valor_fundo_local {MONEY}, valor_liquido {MONEY},
             mes TEXT NOT NULL, ano INTEGER NOT NULL, data_registro TEXT, obs TEXT,
             created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''',
         '''CREATE TABLE IF NOT EXISTS regras (
@@ -203,17 +203,17 @@ def init_db():
         f'''CREATE TABLE IF NOT EXISTS compromissos (
             id {PK}, cong_id INTEGER NOT NULL, ano INTEGER NOT NULL, categoria TEXT NOT NULL,
             nivelacao INTEGER NOT NULL DEFAULT 0, fundo_local_pct INTEGER NOT NULL DEFAULT 0,
-            betel INTEGER NOT NULL DEFAULT 0, media REAL DEFAULT 0, meses INTEGER DEFAULT 0,
-            salario_minimo REAL DEFAULT 0, observacao TEXT,
+            betel INTEGER NOT NULL DEFAULT 0, media {MONEY} DEFAULT 0, meses INTEGER DEFAULT 0,
+            salario_minimo {MONEY} DEFAULT 0, observacao TEXT,
             emitido_por INTEGER, emitido_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             confirmado_por INTEGER, confirmado_em TIMESTAMP,
             UNIQUE(cong_id, ano))''',
         f'''CREATE TABLE IF NOT EXISTS fechamentos (
             id {PK}, cong_id INTEGER NOT NULL, ano INTEGER NOT NULL, mes INTEGER NOT NULL,
-            status TEXT NOT NULL, calculo TEXT NOT NULL, total REAL NOT NULL,
+            status TEXT NOT NULL, calculo TEXT NOT NULL, total {MONEY} NOT NULL,
             fechado_por INTEGER, fechado_em TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
             aprovado_por INTEGER, aprovado_em TIMESTAMP,
-            comprovante_valor REAL, comprovante_data TEXT,
+            comprovante_valor {MONEY}, comprovante_data TEXT,
             comprovante_arquivo {BLOB}, comprovante_nome TEXT, comprovante_tipo TEXT,
             enviado_por INTEGER, enviado_em TIMESTAMP,
             recebido_por INTEGER, recebido_em TIMESTAMP,
@@ -229,18 +229,19 @@ def init_db():
             id {PK}, chave TEXT NOT NULL, quando TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''',
     ]
     if db.IS_PG:
-        # No Postgres, REAL tem só ~7 dígitos (1.234.567,89 virava 1.234.567,88/90). Valores em dupla precisão.
+        # No Postgres, REAL tem só ~7 dígitos; o que não é dinheiro (percentuais, regras) fica em dupla precisão.
         stmts = [st.replace(' REAL', ' DOUBLE PRECISION') for st in stmts]
     for s in stmts:
         conn.execute(s)
 
-    # Bancos já criados com REAL (precisão simples): passa para dupla precisão, arredondando aos centavos
+    # Bancos já criados: dinheiro passa para NUMERIC(14,2) (exato); percentuais e regras para dupla precisão
     if db.IS_PG:
-        for r in conn.execute("SELECT table_name AS t, column_name AS c FROM information_schema.columns "
-                              "WHERE table_schema = current_schema() AND data_type = 'real'").fetchall():
-            centavos = r['t'] != 'regras' and not r['c'].startswith('pct')
-            uso = f"ROUND({r['c']}::numeric, 2)::double precision" if centavos else f"{r['c']}::double precision"
-            conn.execute(f"ALTER TABLE {r['t']} ALTER COLUMN {r['c']} TYPE DOUBLE PRECISION USING {uso}")
+        for r in conn.execute("SELECT table_name AS t, column_name AS c, data_type AS tipo FROM information_schema.columns "
+                              "WHERE table_schema = current_schema() AND data_type IN ('real', 'double precision')").fetchall():
+            if (r['t'], r['c']) in COLUNAS_DINHEIRO:
+                conn.execute(f"ALTER TABLE {r['t']} ALTER COLUMN {r['c']} TYPE NUMERIC(14,2) USING ROUND({r['c']}::numeric, 2)")
+            elif r['tipo'] == 'real':
+                conn.execute(f"ALTER TABLE {r['t']} ALTER COLUMN {r['c']} TYPE DOUBLE PRECISION")
 
     # Colunas novas em bancos antigos
     _add_col(conn, 'transacoes', 'origem', 'TEXT')
@@ -345,6 +346,13 @@ ITENS_RENOMEADOS = {
 
 
 # Itens repetidos unificados (nov/2026). (livro ou None, tipo, nome velho) -> nome único
+COLUNAS_DINHEIRO = {
+    ('transacoes', 'valor'), ('orcamento', 'orcam_ano'), ('orcamento', 'orcam_mes'),
+    ('dizimos', 'dizimo_bruto'), ('dizimos', 'valor_nacional'), ('dizimos', 'valor_fundo_local'),
+    ('dizimos', 'valor_liquido'), ('compromissos', 'media'), ('compromissos', 'salario_minimo'),
+    ('fechamentos', 'total'), ('fechamentos', 'comprovante_valor'),
+}
+
 ITENS_UNIFICADOS = [
     (None, 'Saída', 'Compra de Utensílios de Limpeza', 'Produtos de Limpeza'),
     (None, 'Saída', 'Cafeteria / Restaurante', 'Eventos e Alimentação'),
@@ -576,17 +584,17 @@ def parse_valor(txt, minimo=None):
     if t.startswith('-'):
         raise ValueError('O valor não pode ser negativo.')
     if _RE_BR_MILHAR.match(t) or _RE_BR.match(t):
-        v = float(t.replace('.', '').replace(',', '.'))
+        v = R.D(t.replace('.', '').replace(',', '.'))
     elif _RE_PONTO_DECIMAL.match(t):
-        v = float(t)
+        v = R.D(t)
     else:
         raise ValueError(f'Não entendi o valor "{txt}". Escreva como 1.234,56 (ponto nos milhares e vírgula nos centavos).')
     if v > 10_000_000:
         raise ValueError('Valor acima do limite de R$ 10.000.000,00.')
-    v = round(v, 2)
-    if minimo is not None and v < minimo:
+    v = R.centavos(v)   # Decimal exato; o banco guarda em NUMERIC(14,2)
+    if minimo is not None and v < R.D(minimo):
         raise ValueError(f'O valor precisa ser de pelo menos {fmt_brl(minimo)}.')
-    return v
+    return float(v)
 
 
 def validar_data(txt, ano, mes_nome, obrigatoria=False):
@@ -665,16 +673,16 @@ def saldos_livros(conn, cid, ano, cfg=None, projetar=False):
     """Saldo de cada livro no ano (com o saldo do ano anterior no caixa local e os repasses entre livros).
     projetar=True soma ao caixa local o fundo local dos dízimos de meses ainda não fechados (entra no fechamento)."""
     cfg = cfg or get_cfg()
-    out = {lv: 0.0 for lv in LIVROS}
-    out['FundoLocal'] = float(cfg.get('saldo_ano_anterior', 0) or 0)
+    out = {lv: R.D(0) for lv in LIVROS}
+    out['FundoLocal'] = R.D(cfg.get('saldo_ano_anterior', 0) or 0)
     for r in conn.execute('''SELECT livro, COALESCE(SUM(CASE WHEN tipo='Entrada' THEN valor ELSE -valor END),0) AS t
                              FROM transacoes WHERE cong_id=? AND ano=? GROUP BY livro''', (cid, ano)).fetchall():
-        out[r['livro']] = out.get(r['livro'], 0.0) + float(r['t'] or 0)
+        out[r['livro']] = out.get(r['livro'], R.D(0)) + R.D(r['t'] or 0)
     if projetar:
         fechados = {MESES[f['mes'] - 1] for f in conn.execute('SELECT mes FROM fechamentos WHERE cong_id=? AND ano=?',
                                                                  (cid, ano)).fetchall()}
-        out['FundoLocal'] += sum(x['fl'] for x in liquidacao_por_mes(conn, cid, ano) if x['mes'] not in fechados)
-    return {k: round(v, 2) for k, v in out.items()}
+        out['FundoLocal'] += R.D(R.soma(x['fl'] for x in liquidacao_por_mes(conn, cid, ano) if x['mes'] not in fechados))
+    return {k: R.r2(v) for k, v in out.items()}
 
 
 MES_ORDEM = 'CASE mes ' + ' '.join(f"WHEN '{m}' THEN {i + 1}" for i, m in enumerate(MESES)) + ' ELSE 13 END'
@@ -685,9 +693,9 @@ MES_ORDEM = 'CASE mes ' + ' '.join(f"WHEN '{m}' THEN {i + 1}" for i, m in enumer
 # ═════════════════════════════════════════════
 def fmt_brl(value):
     try:
-        v = round(float(value), 2) + 0.0
+        v = R.centavos(value)
         if v == 0:
-            v = 0.0
+            v = abs(v)   # nada de "R$ -0,00"
         return f"R$ {v:,.2f}".replace(',', 'X').replace('.', ',').replace('X', '.')
     except Exception:
         return "R$ 0,00"

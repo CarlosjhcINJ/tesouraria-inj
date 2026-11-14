@@ -2983,6 +2983,17 @@ def exportar_excel():
                      as_attachment=True, download_name=f'Tesouraria_{nome}_{ano}.xlsx')
 
 
+@app.errorhandler(404)
+def nao_encontrada(_):
+    """Página ou registro inexistente: volta para o início em vez de mostrar 'Not Found'."""
+    if request.path.startswith('/static/'):
+        return 'Arquivo não encontrado', 404
+    if session.get('user_id'):
+        flash('Essa página não existe ou não está disponível. Você voltou para o início.', 'warning')
+        return redirect(url_for('inicio'))
+    return redirect(url_for('login'))
+
+
 @app.errorhandler(413)
 def muito_grande(_):
     flash('O arquivo é grande demais. O limite é 5 MB.', 'danger')

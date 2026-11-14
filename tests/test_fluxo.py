@@ -112,7 +112,7 @@ def test_fluxo_completo(app):
         assert r.status_code == 302
     # uma despesa local com comprovante
     tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Saída', 'item': 'Serviços Públicos (água, luz)',
-                                   'valor': '210,00', 'mes': 'setembro', 'ano': 2026,
+                                   'valor': '210,00', 'mes': 'setembro', 'ano': 2026, 'confirmo_negativo': '1',
                                    'anexo': (io.BytesIO(PDF), 'conta-luz.pdf', 'application/pdf')},
              content_type='multipart/form-data')
 
@@ -314,7 +314,7 @@ def test_recibo_configuracao_balanco_e_impressao(app):
     assert 'já foram confirmadas' in tes.post('/configuracoes', data=dados, follow_redirects=True).get_data(as_text=True)
     # lançamento com nome -> recibo com valor por extenso e nomes
     r = tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Saída', 'item': 'Serviços Públicos (água, luz)', 'valor': '1.250,50',
-                                       'mes': 'outubro', 'ano': 2026, 'pessoa': 'Sabesp', 'voltar': 'lancar'})
+                                       'mes': 'outubro', 'ano': 2026, 'pessoa': 'Sabesp', 'confirmo_negativo': '1', 'voltar': 'lancar'})
     tid = int(r.headers['Location'].split('ultimo=')[1])
     assert 'Imprimir recibo' in tes.get(r.headers['Location']).get_data(as_text=True)
     rec = tes.get(f'/recibo/lancamento/{tid}').get_data(as_text=True)
@@ -613,3 +613,63 @@ def test_acesso_arquivado_explica_o_caminho(app):
     assert 'período de teste' in r
     r = cli.post('/login', data={'usuario': 'tesarq', 'senha': 'errada-000'}).get_data(as_text=True)
     assert 'incorretos' in r and 'período de teste' not in r
+
+
+def test_correcoes_da_equipe(app):
+    """Bugs do teste da equipe: dízimo no orçamento, mensal, saldo negativo, rascunho, recibo Dinheiro+Pix, comprovante depois."""
+    with appmod.get_db() as conn:
+        conn.execute('DELETE FROM login_falhas')
+    tes = entrar(app, 'vr.tesouraria', 'tesoureiro123')
+    # orçamento: formato brasileiro, mensal calculado, linhas vazias não guardadas
+    tes.post('/orcamento?ano=2027', data={'item[]': ['Dízimo bruto do mês', 'Conta de Luz', 'Internet'],
+                                          'tipo[]': ['Entrada', 'Saída', 'Saída'], 'ano[]': ['2027'] * 3,
+                                          'orcam_ano[]': ['84.000,00', '', ''], 'orcam_mes[]': ['', '300,00', ''],
+                                          'obs[]': ['', '', '']})
+    with appmod.get_db() as conn:
+        rows = {r['item']: (r['orcam_ano'], r['orcam_mes']) for r in
+                conn.execute('SELECT * FROM orcamento WHERE ano=2027').fetchall()}
+    assert rows == {'Dízimo bruto do mês': (84000, 7000), 'Conta de Luz': (3600, 300)}
+    pag = tes.get('/orcamento?ano=2027').get_data(as_text=True)
+    assert 'value="84.000,00"' in pag and 'value="7.000,00"' in pag
+    # dízimo conta no realizado
+    tes.post('/dizimos', data={'mes': 'março', 'ano': 2027, 'dizimo_bruto': '7.000,00'})
+    with appmod.get_db() as conn:
+        n = conn.execute("SELECT COUNT(*) AS n FROM dizimos WHERE ano=2027").fetchone()['n']
+    assert n == 1, 'dízimo de 2027 não gravou'
+    assert 'R$ 7.000,00 / R$ 84.000,00' in tes.get('/orcamento?ano=2027').get_data(as_text=True)
+    # saída maior que o saldo: volta ao assistente pedindo confirmação, sem gravar
+    base = {'livro': 'Projetos', 'tipo': 'Saída', 'item': 'Mão de Obra', 'valor': '5.000,00', 'mes': 'março', 'ano': 2026,
+            'voltar': 'lancar'}
+    with appmod.get_db() as conn:
+        antes = conn.execute('SELECT COUNT(*) AS n FROM transacoes').fetchone()['n']
+    r = tes.post('/lancamentos', data=base)
+    assert 'restaurar=1' in r.headers['Location'] and 'negativo=1' in r.headers['Location']
+    with appmod.get_db() as conn:
+        assert conn.execute('SELECT COUNT(*) AS n FROM transacoes').fetchone()['n'] == antes
+    assert 'Confirmo' in tes.get(r.headers['Location']).get_data(as_text=True)
+    r = tes.post('/lancamentos', data={**base, 'confirmo_negativo': '1'})
+    assert 'ultimo=' in r.headers['Location']
+    tid = int(r.headers['Location'].split('ultimo=')[1])
+    # erro de digitação volta ao assistente (não perde o que foi digitado)
+    r = tes.post('/lancamentos', data={**base, 'valor': 'abc'})
+    assert '/lancar' in r.headers['Location'] and 'restaurar=1' in r.headers['Location']
+    # comprovante depois: aparece nas pendências e anexa
+    assert 'sem comprovante' in tes.get('/?ano=2026').get_data(as_text=True)
+    assert 'Anexar' in tes.get('/lancamentos?ano=2026&sem_comprovante=1').get_data(as_text=True)
+    tes.post(f'/lancamentos/{tid}/anexo', data={'voltar': 'pendentes', 'anexo': (io.BytesIO(PDF), 'nf.pdf', 'application/pdf')},
+             content_type='multipart/form-data')
+    with appmod.get_db() as conn:
+        assert conn.execute('SELECT COUNT(*) AS n FROM anexos WHERE transacao_id=?', (tid,)).fetchone()['n'] == 1
+    # Dinheiro + Pix: um recibo só, pelo total
+    r = tes.post('/lancamentos', data={'livro': 'Projetos', 'tipo': 'Entrada', 'item': 'Atividades - Cantina', 'valor': '320,00',
+                                       'forma': 'Dinheiro + Pix', 'valor_pix': '120,00', 'mes': 'março', 'ano': 2026,
+                                       'voltar': 'lancar'})
+    tid = int(r.headers['Location'].split('ultimo=')[1])
+    with appmod.get_db() as conn:
+        partes = conn.execute('SELECT * FROM transacoes WHERE lote=? ORDER BY id', (tid,)).fetchall()
+    assert [p['valor'] for p in partes] == [200.0, 120.0]
+    for p in partes:
+        rec = tes.get(f"/recibo/lancamento/{p['id']}").get_data(as_text=True)
+        assert 'R$ 320,00' in rec and 'trezentos e vinte reais' in rec
+    # início separa o dinheiro da congregação do que vai para a nacional
+    assert 'Disponível da congregação' in tes.get('/?ano=2026').get_data(as_text=True)

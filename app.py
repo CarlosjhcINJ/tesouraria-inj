@@ -13,7 +13,7 @@ from flask import (Flask, render_template, request, redirect, url_for,
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from datetime import datetime, date, timedelta, timezone
-import os, io, json, hashlib, hmac, secrets
+import os, io, re, json, hashlib, hmac, secrets
 
 import db
 import regras as R
@@ -230,6 +230,7 @@ def init_db():
     _add_col(conn, 'transacoes', 'forma', 'TEXT')
     _add_col(conn, 'transacoes', 'usuario_id', 'INTEGER')
     _add_col(conn, 'transacoes', 'pessoa', 'TEXT')
+    _add_col(conn, 'transacoes', 'lote', 'INTEGER')   # partes de um mesmo recebimento (Dinheiro + Pix)
     _add_col(conn, 'dizimos', 'usuario_id', 'INTEGER')
 
     # Migração do modelo antigo (login na própria congregação)
@@ -520,6 +521,22 @@ def parse_valor(txt):
     return round(v, 2)
 
 
+def saldos_livros(conn, cid, ano, cfg=None, projetar=False):
+    """Saldo de cada livro no ano (com o saldo do ano anterior no caixa local e os repasses entre livros).
+    projetar=True soma ao caixa local o fundo local dos dízimos de meses ainda não fechados (entra no fechamento)."""
+    cfg = cfg or get_cfg()
+    out = {lv: 0.0 for lv in LIVROS}
+    out['FundoLocal'] = float(cfg.get('saldo_ano_anterior', 0) or 0)
+    for r in conn.execute('''SELECT livro, COALESCE(SUM(CASE WHEN tipo='Entrada' THEN valor ELSE -valor END),0) AS t
+                             FROM transacoes WHERE cong_id=? AND ano=? GROUP BY livro''', (cid, ano)).fetchall():
+        out[r['livro']] = out.get(r['livro'], 0.0) + float(r['t'] or 0)
+    if projetar:
+        fechados = {MESES[f['mes'] - 1] for f in conn.execute('SELECT mes FROM fechamentos WHERE cong_id=? AND ano=?',
+                                                                 (cid, ano)).fetchall()}
+        out['FundoLocal'] += sum(x['fl'] for x in liquidacao_por_mes(conn, cid, ano) if x['mes'] not in fechados)
+    return {k: round(v, 2) for k, v in out.items()}
+
+
 MES_ORDEM = 'CASE mes ' + ' '.join(f"WHEN '{m}' THEN {i + 1}" for i, m in enumerate(MESES)) + ' ELSE 13 END'
 
 
@@ -602,6 +619,18 @@ def valor_extenso(v):
 
 app.jinja_env.filters['extenso'] = valor_extenso
 app.jinja_env.filters['brl'] = fmt_brl
+
+
+def fmt_num(value):
+    """84000 -> '84.000,00' (para campos de digitação); vazio quando zero."""
+    try:
+        v = round(float(value or 0), 2)
+    except (TypeError, ValueError):
+        return ''
+    return '' if not v else fmt_brl(v)[3:]
+
+
+app.jinja_env.filters['num_br'] = fmt_num
 app.jinja_env.filters['data'] = fmt_data
 app.jinja_env.globals['now'] = datetime.now
 app.jinja_env.globals['enumerate'] = enumerate
@@ -907,11 +936,16 @@ def dashboard():
                                 (cid,)).fetchall()
         comp = conn.execute('SELECT * FROM compromissos WHERE cong_id=? AND ano=?', (cid, ano)).fetchone()
         falta = cadastro_falta(conn, cid, ano, cfg)
+        sl = saldos_livros(conn, cid, ano, cfg)
+        sem_comp = conn.execute('''SELECT COUNT(*) AS n FROM transacoes t WHERE t.cong_id=? AND t.ano=? AND t.tipo='Saída'
+                                   AND t.origem IS NULL AND NOT EXISTS (SELECT 1 FROM anexos a WHERE a.transacao_id=t.id)''',
+                                (cid, ano)).fetchone()['n']
     saldo_ant = float(cfg.get('saldo_ano_anterior', 0) or 0)
     return render_template('inicio.html', falta=falta, comp=comp, cfg=cfg, ano=ano, mes=mes, nome_mes=nome_mes, anos=ANOS,
                            ent_mes=ent_mes, sai_mes=sai_mes, diz_mes=diz_mes, saldo=saldo_ant + ent_ano - sai_ano,
                            orc=orc, sai_ano=sai_ano, n_mes=n_mes, fech=fech, livros=livros, livros_labels=LIVROS_LABELS,
-                           recentes=recentes)
+                           recentes=recentes, sem_comp=sem_comp,
+                           disponivel=sl['FundoLocal'] + sl['Projetos'], a_enviar=sl['Envios'] + sl['LiqDízimos'])
 
 
 @app.route('/visao-geral')
@@ -987,6 +1021,13 @@ def _ler_anexo(campo):
     return {'nome': nome, 'tipo': tipo, 'dados': dados}
 
 
+def _voltar_lancar(**extra):
+    """Se veio do assistente, volta para ele com o que foi digitado (o navegador restaura o rascunho)."""
+    if request.form.get('voltar') != 'lancar':
+        return None
+    return redirect(url_for('lancar', tipo=request.form.get('tipo', ''), restaurar=1, **extra))
+
+
 @app.route('/lancamentos', methods=['GET', 'POST'])
 @cong_required
 def lancamentos():
@@ -1016,15 +1057,23 @@ def lancamentos():
                 partes = [(round(valor - pix, 2), 'Dinheiro'), (pix, 'Pix')]
             anexo = _ler_anexo('anexo')
         except (ValueError, KeyError) as e:
-            flash(str(e) if str(e) else 'Confira os campos do lançamento.', 'danger')
-            return redirect(url_for('lancamentos', ano=ano_sel, mes=mes_sel))
+            msg = str(e) if str(e) and 'could not convert' not in str(e) else 'Confira o valor: use só números, como 1.234,56.'
+            flash(msg, 'danger')
+            return _voltar_lancar() or redirect(url_for('lancamentos', ano=ano_sel, mes=mes_sel))
         bloqueio = exigir_cadastro(ano)
         if bloqueio:
             return bloqueio
         with get_db() as conn:
             if mes_travado(conn, cid, ano, mes):
                 flash(f'{mes.capitalize()}/{ano} já foi fechado. Peça ao pastor para reabrir o mês.', 'danger')
-                return redirect(url_for('lancamentos', ano=ano, mes=mes))
+                return _voltar_lancar() or redirect(url_for('lancamentos', ano=ano, mes=mes))
+            if tipo == 'Saída' and not request.form.get('confirmo_negativo'):
+                saldo_lv = saldos_livros(conn, cid, ano, cfg, projetar=True).get(livro, 0.0)
+                if valor > saldo_lv + 0.005:
+                    flash(f'Esta saída de {fmt_brl(valor)} deixa o livro {LIVRO_NOME[livro]} negativo '
+                          f'(saldo atual {fmt_brl(saldo_lv)}). Confira se não sobrou um zero. Se o valor está certo, '
+                          'marque "Confirmo" e registre de novo.', 'warning')
+                    return _voltar_lancar(negativo=1) or redirect(url_for('lancamentos', ano=ano, mes=mes))
             obs = request.form.get('obs', '')[:300]
             tid = None
             for v_parte, f_parte in partes:
@@ -1035,13 +1084,15 @@ def lancamentos():
                                     request.form.get('data_registro', datetime.now().strftime('%d/%m/%Y')),
                                     obs_parte[:300], f_parte, session['user_id'], request.form.get('pessoa', '').strip()[:120] or None))
                 tid = tid or novo
+                if len(partes) > 1:
+                    conn.execute('UPDATE transacoes SET lote=? WHERE id=?', (tid, novo))
             if anexo:
                 conn.execute('INSERT INTO anexos (transacao_id, nome, tipo, dados) VALUES (?,?,?,?)',
                              (tid, anexo['nome'], anexo['tipo'], anexo['dados']))
         msg = f'{tipo} de {fmt_brl(valor)} registrada: {item}.' + (
             f' Separada em dinheiro ({fmt_brl(partes[0][0])}) e Pix ({fmt_brl(partes[1][0])}).' if len(partes) == 2 else '')
         if tipo == 'Saída' and not anexo:
-            msg += ' Falta anexar o comprovante da despesa (§ 95).'
+            msg += ' Falta o comprovante: anexe agora ou depois, em Lançamentos (botão do clipe).'
             flash(msg, 'warning')
         else:
             flash(msg, 'success')
@@ -1059,6 +1110,8 @@ def lancamentos():
         if livro_sel in LIVROS:
             q += ' AND t.livro=?'
             p.append(livro_sel)
+        if request.args.get('sem_comprovante'):
+            q += " AND t.tipo='Saída' AND t.origem IS NULL AND NOT EXISTS (SELECT 1 FROM anexos a WHERE a.transacao_id=t.id)"
         q += ' ORDER BY t.id DESC'
         lista = conn.execute(q, p).fetchall()
         travados = {MESES[f['mes'] - 1] for f in
@@ -1072,7 +1125,8 @@ def lancamentos():
     return render_template('lancamentos.html',
         cfg=cfg, categorias=CATEGORIAS, meses=MESES, anos=ANOS, livros=LIVROS, formas=FORMAS,
         livros_labels=LIVROS_LABELS, transacoes=lista, travados=travados,
-        ano_sel=ano_sel, mes_sel=mes_sel, livro_sel=livro_sel, total_e=total_e, total_s=total_s, saldo_inicial=saldo_inicial)
+        ano_sel=ano_sel, mes_sel=mes_sel, livro_sel=livro_sel, total_e=total_e, total_s=total_s, saldo_inicial=saldo_inicial,
+        sem_comprovante=bool(request.args.get('sem_comprovante')))
 
 
 GRUPOS_LANCAR = {
@@ -1103,10 +1157,16 @@ def lancar():
     ultimo = None
     if request.args.get('ultimo', '').isdigit():
         with get_db() as conn:
-            ultimo = conn.execute('SELECT * FROM transacoes WHERE id=? AND cong_id=?',
+            ultimo = conn.execute('''SELECT t.*, (SELECT COUNT(*) FROM anexos a WHERE a.transacao_id=t.id) AS n_anexos,
+                                            (SELECT SUM(x.valor) FROM transacoes x WHERE x.lote=t.id AND x.cong_id=t.cong_id) AS total_lote
+                                     FROM transacoes t WHERE t.id=? AND t.cong_id=?''',
                                   (int(request.args['ultimo']), get_cong_id())).fetchone()
+    with get_db() as conn:
+        saldos = saldos_livros(conn, get_cong_id(), hoje.year, projetar=True)
     return render_template('lancar.html', cfg=get_cfg(), tipo=tipo, grupos=grupos, meses=MESES, anos=ANOS, formas=FORMAS,
-                           ultimo=ultimo, envios_auto={
+                           ultimo=ultimo, saldos=saldos, livro_nome=LIVRO_NOME,
+                           restaurar=bool(request.args.get('restaurar')), negativo=bool(request.args.get('negativo')),
+                           envios_auto={
                                'liq': ['Dízimo dos Dízimos 10%', 'Nivelação 5% (se houver)', 'Betel 4% (se houver)',
                                        'Aporte ao fundo local', 'Sustento pastoral'],
                                'nac': [rot for _, rot, _ in R.LINHAS_NACIONAL],
@@ -1195,10 +1255,18 @@ def recibo(tipo, rid):
             if not r or r['origem']:
                 abort(404)
             entrada = r['tipo'] == 'Entrada'
-            dados = {'numero': f"L-{rid:05d}", 'valor': r['valor'], 'data': r['data_registro'] or '',
-                     'entrada': entrada, 'pessoa': r['pessoa'] or '', 'forma': r['forma'] or '',
+            valor, forma, obs, numero = r['valor'], r['forma'] or '', r['obs'] or '', f"L-{rid:05d}"
+            if r.get('lote'):   # Dinheiro + Pix: um recibo só, pelo total
+                partes = conn.execute('SELECT * FROM transacoes WHERE lote=? AND cong_id=? ORDER BY id',
+                                      (r['lote'], cid)).fetchall()
+                valor = round(sum(x['valor'] for x in partes), 2)
+                forma = ' + '.join(f"{x['forma']} {fmt_brl(x['valor'])}" for x in partes)
+                obs = re.sub(r'\s*·?\s*parte em \w+ de R\$ [\d.,]+$', '', partes[0]['obs'] or '').strip()
+                numero = f"L-{r['lote']:05d}"
+            dados = {'numero': numero, 'valor': valor, 'data': r['data_registro'] or '',
+                     'entrada': entrada, 'pessoa': r['pessoa'] or '', 'forma': forma,
                      'referente': f"{r['item']} ({LIVRO_NOME.get(r['livro'], r['livro'])}) — {r['mes']}/{r['ano']}",
-                     'obs': r['obs'] or ''}
+                     'obs': obs}
         elif tipo == 'dizimo':
             r = conn.execute('SELECT * FROM dizimos WHERE id=? AND cong_id=?', (rid, cid)).fetchone()
             if not r:
@@ -1287,6 +1355,8 @@ def balanco():
         reais = {}
         for x in lista:
             reais[x['item']] = reais.get(x['item'], 0) + x['t']
+        if tipo == 'Entrada' and diz['bruto']:
+            reais['Dízimo bruto do mês'] = reais.get('Dízimo bruto do mês', 0) + diz['bruto']
         for (item, t), v in orc.items():
             if t == tipo and v:
                 reais.setdefault(item, 0)
@@ -1379,7 +1449,12 @@ def anexo_lancamento(tid):
                 return redirect(url_for('lancamentos', ano=t['ano'], mes=t['mes']))
             conn.execute('INSERT INTO anexos (transacao_id, nome, tipo, dados) VALUES (?,?,?,?)',
                          (tid, anexo['nome'], anexo['tipo'], anexo['dados']))
+            auditar(conn, 'lancamento.anexo', f"Comprovante anexado ao lançamento #{tid}")
             flash('Comprovante anexado.', 'success')
+            if request.form.get('voltar') == 'lancar':
+                return redirect(url_for('lancar', tipo=t['tipo']))
+            if request.form.get('voltar') == 'pendentes':
+                return redirect(url_for('lancamentos', ano=t['ano'], sem_comprovante=1))
             return redirect(url_for('lancamentos', ano=t['ano'], mes=t['mes']))
         a = conn.execute('SELECT * FROM anexos WHERE transacao_id=? ORDER BY id DESC', (tid,)).fetchone()
     if not a:
@@ -1740,17 +1815,33 @@ def orcamento():
         orcam_anos = request.form.getlist('orcam_ano[]')
         orcam_meses = request.form.getlist('orcam_mes[]')
         obs_list = request.form.getlist('obs[]')
-        with get_db() as conn:
+        try:
+            linhas = []
             for i in range(len(items)):
-                if items[i]:
-                    conn.execute('''INSERT INTO orcamento (cong_id,item,tipo,orcam_ano,orcam_mes,observacao,ano)
-                        VALUES (?,?,?,?,?,?,?)
-                        ON CONFLICT (cong_id,item,tipo,ano) DO UPDATE SET
-                            orcam_ano=excluded.orcam_ano, orcam_mes=excluded.orcam_mes, observacao=excluded.observacao''',
-                                 (cid, items[i], tipos[i], float(orcam_anos[i] or 0), float(orcam_meses[i] or 0),
-                                  obs_list[i] if i < len(obs_list) else '',
-                                  int(anos_f[i]) if i < len(anos_f) else ano_sel))
-        flash('Orçamento salvo.', 'success')
+                if not items[i]:
+                    continue
+                a = parse_valor(orcam_anos[i]) if i < len(orcam_anos) and orcam_anos[i].strip() else 0.0
+                m = parse_valor(orcam_meses[i]) if i < len(orcam_meses) and orcam_meses[i].strip() else 0.0
+                if a and not m:
+                    m = round(a / 12, 2)
+                elif m and not a:
+                    a = round(m * 12, 2)
+                linhas.append((items[i], tipos[i], a, m, obs_list[i] if i < len(obs_list) else '',
+                               int(anos_f[i]) if i < len(anos_f) else ano_sel))
+        except ValueError:
+            flash('Confira os valores do orçamento: use só números, como 84.000,00.', 'danger')
+            return redirect(url_for('orcamento', ano=ano_sel, aba='definir'))
+        with get_db() as conn:
+            for item, tipo, a, m, obs, ano_l in linhas:
+                if not a and not m:   # linha vazia: não guarda (e apaga se existia)
+                    conn.execute('DELETE FROM orcamento WHERE cong_id=? AND item=? AND tipo=? AND ano=?', (cid, item, tipo, ano_l))
+                    continue
+                conn.execute('''INSERT INTO orcamento (cong_id,item,tipo,orcam_ano,orcam_mes,observacao,ano)
+                    VALUES (?,?,?,?,?,?,?)
+                    ON CONFLICT (cong_id,item,tipo,ano) DO UPDATE SET
+                        orcam_ano=excluded.orcam_ano, orcam_mes=excluded.orcam_mes, observacao=excluded.observacao''',
+                             (cid, item, tipo, a, m, obs, ano_l))
+        flash('Orçamento salvo. Onde você deixou o mensal em branco, ele foi calculado (anual ÷ 12).', 'success')
         return redirect(url_for('orcamento', ano=ano_sel))
 
     with get_db() as conn:
@@ -1759,6 +1850,8 @@ def orcamento():
         reais = {(r['item'], r['tipo']): r['t'] for r in conn.execute(
             '''SELECT item, tipo, SUM(valor) AS t FROM transacoes WHERE cong_id=? AND ano=?
                AND COALESCE(transferencia,0)=0 GROUP BY item, tipo''', (cid, ano_sel)).fetchall()}
+        reais[('Dízimo bruto do mês', 'Entrada')] = float(conn.execute(
+            'SELECT COALESCE(SUM(dizimo_bruto),0) AS t FROM dizimos WHERE cong_id=? AND ano=?', (cid, ano_sel)).fetchone()['t'])
     todos_e = sorted(set(i for _, its in ORC_GRUPOS['Entrada'] for i in its))
     todos_s = sorted(set(i for _, its in ORC_GRUPOS['Saída'] for i in its))
 
@@ -1774,6 +1867,7 @@ def orcamento():
         return result
 
     return render_template('orcamento.html', cfg=cfg, ano_sel=ano_sel, anos=ANOS, categorias=CATEGORIAS, livros=LIVROS,
+                           aba=request.args.get('aba', ''),
                            orc_grupos=ORC_GRUPOS,
                            comparativo_e=comparativo(todos_e, 'Entrada'), comparativo_s=comparativo(todos_s, 'Saída'),
                            orc_map={k: dict(v) for k, v in orc_map.items()})

@@ -1,12 +1,13 @@
 {% extends 'base.html' %}
 {% block title %}Orçamento — Tesouraria INJ{% endblock %}
+
 {% block breadcrumb %}<li class="breadcrumb-item active">Orçamento</li>{% endblock %}
 
 {% block content %}
 <div class="d-flex align-items-center justify-content-between mb-4">
   <div>
     <h1 class="page-title">Orçamento</h1>
-    <p class="text-muted mb-0 small">Planejado vs realizado por categoria</p>
+    <p class="text-muted mb-0 small">Planejado vs realizado por categoria. O realizado dos dízimos vem sozinho da tela Dízimos.</p>
   </div>
   <form class="d-flex gap-2 align-items-center">
     <label class="form-label mb-0 small fw-semibold">Ano:</label>
@@ -114,6 +115,7 @@
       <div class="form-section-title">
         <i class="bi bi-pencil-square me-2"></i>Definir Metas Orçamentárias — {{ ano_sel }}
       </div>
+      <p class="small text-muted">Preencha só o <b>anual</b> (ex.: 84.000,00): o mensal é calculado sozinho (anual ÷ 12). Se preencher só o mensal, o anual vira mensal × 12. Linhas em branco não são guardadas.</p>
       <form method="POST" action="{{ url_for('orcamento', ano=ano_sel) }}">
 
         <div class="row g-4">
@@ -136,14 +138,12 @@
                       <input type="hidden" name="ano[]"      value="{{ ano_sel }}"/>
                     </td>
                     <td>
-                      <input type="number" name="orcam_ano[]" class="form-control form-control-sm"
-                             step="0.01" min="0" style="width:100px"
-                             value="{{ orc.orcam_ano if orc else '' }}" placeholder="0"/>
+                      <input type="text" inputmode="decimal" name="orcam_ano[]" class="form-control form-control-sm orc-ano"
+                             style="width:110px" value="{{ (orc.orcam_ano if orc else 0) | num_br }}" placeholder="0,00"/>
                     </td>
                     <td>
-                      <input type="number" name="orcam_mes[]" class="form-control form-control-sm"
-                             step="0.01" min="0" style="width:100px"
-                             value="{{ orc.orcam_mes if orc else '' }}" placeholder="0"/>
+                      <input type="text" inputmode="decimal" name="orcam_mes[]" class="form-control form-control-sm orc-mes"
+                             style="width:110px" value="{{ (orc.orcam_mes if orc else 0) | num_br }}" placeholder="0,00"/>
                     </td>
                   </tr>
                   <input type="hidden" name="obs[]" value="{{ orc.observacao if orc else '' }}"/>
@@ -173,14 +173,12 @@
                       <input type="hidden" name="ano[]"      value="{{ ano_sel }}"/>
                     </td>
                     <td>
-                      <input type="number" name="orcam_ano[]" class="form-control form-control-sm"
-                             step="0.01" min="0" style="width:100px"
-                             value="{{ orc.orcam_ano if orc else '' }}" placeholder="0"/>
+                      <input type="text" inputmode="decimal" name="orcam_ano[]" class="form-control form-control-sm orc-ano"
+                             style="width:110px" value="{{ (orc.orcam_ano if orc else 0) | num_br }}" placeholder="0,00"/>
                     </td>
                     <td>
-                      <input type="number" name="orcam_mes[]" class="form-control form-control-sm"
-                             step="0.01" min="0" style="width:100px"
-                             value="{{ orc.orcam_mes if orc else '' }}" placeholder="0"/>
+                      <input type="text" inputmode="decimal" name="orcam_mes[]" class="form-control form-control-sm orc-mes"
+                             style="width:110px" value="{{ (orc.orcam_mes if orc else 0) | num_br }}" placeholder="0,00"/>
                     </td>
                   </tr>
                   <input type="hidden" name="obs[]" value="{{ orc.observacao if orc else '' }}"/>
@@ -201,4 +199,22 @@
     </div>
   </div>
 </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+(function () {
+  const num = t => { t = (t || '').replace(/[R$\s]/g, ''); if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.'); return parseFloat(t) || 0; };
+  const fmt = v => v ? v.toLocaleString('pt-BR', {minimumFractionDigits: 2, maximumFractionDigits: 2}) : '';
+  document.querySelectorAll('.orc-ano').forEach(a => {
+    const m = a.closest('tr').querySelector('.orc-mes');
+    let auto = !m.value || Math.abs(num(m.value) - num(a.value) / 12) < 0.01;
+    m.addEventListener('input', () => { auto = !m.value; });
+    a.addEventListener('input', () => { if (auto) m.value = fmt(Math.round(num(a.value) / 12 * 100) / 100); });
+  });
+  if (new URLSearchParams(location.search).get('aba') === 'definir') {
+    const b = document.querySelector('[data-bs-target="#tabDefinir"]'); if (b && window.bootstrap) bootstrap.Tab.getOrCreateInstance(b).show();
+  }
+})();
+</script>
 {% endblock %}

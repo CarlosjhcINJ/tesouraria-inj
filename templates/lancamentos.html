@@ -9,6 +9,12 @@
     <p class="text-muted mb-0 small">{% if pode_editar %}Para registrar, use <a href="{{ url_for('lancar', tipo='Entrada') }}">Registrar entrada</a> ou <a href="{{ url_for('lancar', tipo='Saída') }}">Registrar saída</a>.{% endif %}</p>
   </div>
 </div>
+{% if sem_comprovante %}
+<div class="alert alert-warning d-flex justify-content-between align-items-center flex-wrap gap-2">
+  <span><i class="bi bi-paperclip me-1"></i>Mostrando só as <b>saídas sem comprovante</b> de {{ ano_sel }}. Toque em <b>Anexar</b> e escolha a foto ou o PDF.</span>
+  <a href="{{ url_for('lancamentos', ano=ano_sel) }}" class="btn btn-sm btn-outline-secondary">Ver todos</a>
+</div>
+{% endif %}
 
 <div class="row g-4">
   <!-- ── Formulário Novo Lançamento ── -->
@@ -214,13 +220,14 @@
               </td>
               <td>
                 <div class="d-flex gap-1 align-items-center">
-                {% if not t['origem'] %}<a href="{{ url_for('recibo', tipo='lancamento', rid=t['id']) }}" target="_blank" class="btn btn-xs btn-outline-success" style="padding:2px 8px; font-size:0.75rem" title="Recibo"><i class="bi bi-receipt"></i></a>{% endif %}
+                {% if not t['origem'] and (not t['lote'] or t['lote'] == t['id']) %}<a href="{{ url_for('recibo', tipo='lancamento', rid=t['id']) }}" target="_blank" class="btn btn-xs btn-outline-success" style="padding:2px 8px; font-size:0.75rem" title="Recibo"><i class="bi bi-receipt"></i></a>{% endif %}
                 {% if pode_editar and not t['origem'] and t['mes'] not in travados %}
                 <div class="d-flex gap-1">
                   {% if not t['n_anexos'] %}
                   <form method="POST" action="{{ url_for('anexo_lancamento', tid=t['id']) }}" enctype="multipart/form-data" class="d-inline">
-                    <label class="btn btn-xs btn-outline-primary mb-0" style="padding:2px 8px; font-size:0.75rem" title="Anexar comprovante">
-                      <i class="bi bi-paperclip"></i><input type="file" name="anexo" hidden accept="application/pdf,image/jpeg,image/png,image/webp" onchange="this.form.submit()"/>
+                    {% if sem_comprovante %}<input type="hidden" name="voltar" value="pendentes"/>{% endif %}
+                    <label class="btn btn-xs {{ 'btn-warning' if t['tipo'] == 'Saída' else 'btn-outline-primary' }} mb-0" style="padding:2px 8px; font-size:0.75rem" title="Anexar comprovante">
+                      <i class="bi bi-paperclip"></i>{% if t['tipo'] == 'Saída' %} Anexar{% endif %}<input type="file" name="anexo" hidden accept="application/pdf,image/jpeg,image/png,image/webp" onchange="this.form.submit()"/>
                     </label>
                   </form>
                   {% endif %}

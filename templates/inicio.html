@@ -67,11 +67,17 @@
 </a>
 
 <!-- Resumo do mês -->
-<div class="row g-3 mb-4">
+<div class="row g-3 mb-2">
   <div class="col-6 col-lg-3"><div class="stat-card entrada"><div class="stat-label">Entradas do mês</div><div class="stat-value text-entrada">{{ ent_mes | brl }}</div></div></div>
   <div class="col-6 col-lg-3"><div class="stat-card saida"><div class="stat-label">Saídas do mês</div><div class="stat-value text-saida">{{ sai_mes | brl }}</div></div></div>
   <div class="col-6 col-lg-3"><div class="stat-card dizimo"><div class="stat-label">Dízimos do mês</div><div class="stat-value">{{ diz_mes | brl }}</div></div></div>
-  <div class="col-6 col-lg-3"><div class="stat-card saldo"><div class="stat-label">Saldo em caixa</div><div class="stat-value" style="color:#1a5276">{{ saldo | brl }}</div></div></div>
+  <div class="col-6 col-lg-3"><div class="stat-card saldo"><div class="stat-label">Disponível da congregação</div><div class="stat-value" style="color:{{ '#c0392b' if disponivel < 0 else '#1a5276' }}">{{ disponivel | brl }}</div>
+    <div class="small text-muted">Caixa local + Projetos</div></div></div>
+</div>
+<div class="d-flex flex-wrap gap-3 small mb-4">
+  {% if a_enviar > 0.005 %}<span class="text-muted"><i class="bi bi-send me-1"></i>Separado para enviar à nacional (não é da congregação): <b>{{ a_enviar | brl }}</b></span>{% endif %}
+  <span class="text-muted">Total no caixa: <b>{{ saldo | brl }}</b></span>
+  {% if sem_comp %}<a href="{{ url_for('lancamentos', ano=ano, sem_comprovante=1) }}" class="text-warning-emphasis fw-semibold"><i class="bi bi-paperclip me-1"></i>{{ sem_comp }} saída(s) sem comprovante: anexar</a>{% endif %}
 </div>
 
 <!-- Passo 3: livros -->

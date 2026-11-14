@@ -207,6 +207,9 @@
     document.getElementById('h-item').value = item;
     document.getElementById('f-livro').textContent = 'Livro: ' + rotulo;
     document.getElementById('f-item').textContent = item;
+    const v = document.getElementById('valor');   // rendimentos e tarifas do banco podem ter centavos
+    v.dataset.minimo = ['Rendimentos Bancários', 'Tarifas Bancárias'].includes(item) ? '0.01' : '0.05';
+    v.dispatchEvent(new Event('revalidar'));
     grupos.forEach(g => g.hidden = true); frm.hidden = false;
     passo(3, 'feito'); passo(4, 'atual');
     document.getElementById('valor').focus();

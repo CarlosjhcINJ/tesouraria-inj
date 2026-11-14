@@ -599,6 +599,15 @@ def validar_data(txt, ano, mes_nome, obrigatoria=False):
     return d.strftime('%d/%m/%Y'), avisos
 
 
+# Menor valor aceito: 5 centavos (a menor moeda em circulação). Rendimentos e tarifas do banco podem ter centavos.
+VALOR_MINIMO = 0.05
+ITENS_CENTAVOS = {'Rendimentos Bancários', 'Tarifas Bancárias'}
+
+
+def minimo_do_item(item):
+    return 0.01 if item in ITENS_CENTAVOS else VALOR_MINIMO
+
+
 def ano_arg(padrao=None, nome='ano'):
     """Ano vindo da URL ou do formulário; se vier inválido (ex.: ano=abc), usa o padrão em vez de quebrar a página."""
     try:
@@ -1158,7 +1167,7 @@ def lancamentos():
             livro, tipo, item = request.form['livro'], request.form['tipo'], request.form['item']
             if livro not in CATEGORIAS or tipo not in ('Entrada', 'Saída') or item not in CATEGORIAS[livro][tipo]:
                 raise ValueError('Escolha o livro, o tipo e o item da lista.')
-            valor = parse_valor(request.form['valor'], minimo=0.01)
+            valor = parse_valor(request.form['valor'], minimo=minimo_do_item(item))
             mes, ano = request.form['mes'], int(request.form['ano'])
             if mes not in MESES:
                 raise ValueError('Mês inválido.')
@@ -1167,7 +1176,7 @@ def lancamentos():
             forma = request.form.get('forma')
             partes = [(valor, forma if forma in FORMAS else None)]
             if forma == 'Dinheiro + Pix':
-                pix = parse_valor(request.form.get('valor_pix', ''), minimo=0.01)
+                pix = parse_valor(request.form.get('valor_pix', ''), minimo=VALOR_MINIMO)
                 if not 0 < pix < valor:
                     raise ValueError('Informe quanto entrou em Pix: tem que ser maior que zero e menor que o total.')
                 partes = [(round(valor - pix, 2), 'Dinheiro'), (pix, 'Pix')]
@@ -1506,7 +1515,7 @@ def editar_lancamento(tid):
                 if livro not in CATEGORIAS or tipo not in ('Entrada', 'Saída') or (
                         item not in CATEGORIAS[livro][tipo] and not antigo_ok):
                     raise ValueError('Escolha o livro, o tipo e o item da lista.')
-                valor = parse_valor(request.form['valor'], minimo=0.01)
+                valor = parse_valor(request.form['valor'], minimo=minimo_do_item(item))
                 mes, ano = request.form['mes'], int(request.form['ano'])
                 if mes not in MESES:
                     raise ValueError('Mês inválido.')
@@ -1621,7 +1630,7 @@ def dizimos():
         if not pode_editar():
             abort(403)
         try:
-            bruto = parse_valor(request.form['dizimo_bruto'], minimo=0.01)
+            bruto = parse_valor(request.form['dizimo_bruto'], minimo=VALOR_MINIMO)
             mes, ano = request.form['mes'], int(request.form['ano'])
             if mes not in MESES:
                 raise ValueError('Escolha o mês do dízimo.')

@@ -111,7 +111,7 @@ def test_fluxo_completo(app):
                                            'mes': 'setembro', 'ano': 2026})
         assert r.status_code == 302
     # uma despesa local com comprovante
-    tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Saída', 'item': 'Serviços Públicos (água, luz)',
+    tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Saída', 'item': 'Conta de Luz',
                                    'valor': '210,00', 'mes': 'setembro', 'ano': 2026, 'confirmo_negativo': '1',
                                    'anexo': (io.BytesIO(PDF), 'conta-luz.pdf', 'application/pdf')},
              content_type='multipart/form-data')
@@ -265,7 +265,7 @@ def test_inicio_guiado_e_livro_do_mes(app):
                                        'mes': 'novembro', 'ano': 2026, 'data_registro': '02/11/2026', 'voltar': 'lancar'})
     assert '/lancar' in r.headers['Location']
     livro = tes.get('/livro-do-mes?ano=2026&mes=9').get_data(as_text=True)
-    assert 'LIVRO CAIXA DO MÊS' in livro and 'Serviços Públicos' in livro and 'Saldo anterior' in livro
+    assert 'LIVRO CAIXA DO MÊS' in livro and 'Conta de Luz' in livro and 'Saldo anterior' in livro
     assert 'Brechó' in tes.get('/livro-do-mes?ano=2026&mes=11').get_data(as_text=True)
 
 
@@ -313,7 +313,7 @@ def test_recibo_configuracao_balanco_e_impressao(app):
         assert (c['categoria'], c['fundo_local_pct'], c['betel'], c['nivelacao']) == ('formada', 1, 1, 1) and c['confirmado_em']
     assert 'já foram confirmadas' in tes.post('/configuracoes', data=dados, follow_redirects=True).get_data(as_text=True)
     # lançamento com nome -> recibo com valor por extenso e nomes
-    r = tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Saída', 'item': 'Serviços Públicos (água, luz)', 'valor': '1.250,50',
+    r = tes.post('/lancamentos', data={'livro': 'FundoLocal', 'tipo': 'Saída', 'item': 'Conta de Luz', 'valor': '1.250,50',
                                        'mes': 'outubro', 'ano': 2026, 'pessoa': 'Sabesp', 'confirmo_negativo': '1', 'voltar': 'lancar'})
     tid = int(r.headers['Location'].split('ultimo=')[1])
     assert 'Imprimir recibo' in tes.get(r.headers['Location']).get_data(as_text=True)
@@ -325,7 +325,7 @@ def test_recibo_configuracao_balanco_e_impressao(app):
     assert tes.get('/recibo/lancamento/999999').status_code == 404
     # livros, balanço e central de impressão
     ano = tes.get('/livro-do-mes?ano=2026&periodo=ano').get_data(as_text=True)
-    assert 'LIVRO CAIXA DO ANO' in ano and 'Pr. Fulano de Tal' in ano and 'Serviços Públicos' in ano
+    assert 'LIVRO CAIXA DO ANO' in ano and 'Pr. Fulano de Tal' in ano and 'Conta de Luz' in ano
     so = tes.get('/livro-do-mes?ano=2026&mes=10&livro=Projetos').get_data(as_text=True)
     assert 'LIVRO PROJETOS' in so and 'Sabesp' not in so
     bal = tes.get('/balanco?ano=2026').get_data(as_text=True)
@@ -673,3 +673,21 @@ def test_correcoes_da_equipe(app):
         assert 'R$ 320,00' in rec and 'trezentos e vinte reais' in rec
     # início separa o dinheiro da congregação do que vai para a nacional
     assert 'Disponível da congregação' in tes.get('/?ano=2026').get_data(as_text=True)
+
+
+def test_itens_repetidos_unificados(app):
+    with appmod.get_db() as conn:
+        cid = conn.execute("SELECT id FROM congregacoes WHERE nome='Vila Ramos/SP'").fetchone()['id']
+        for item, livro, tipo in [('Vários', 'FundoLocal', 'Saída'), ('Votos', 'Projetos', 'Entrada'), ('Votos', 'FundoLocal', 'Entrada')]:
+            conn.execute("INSERT INTO transacoes (cong_id,livro,tipo,item,valor,mes,ano) VALUES (?,?,?,?,10,'janeiro',2030)",
+                         (cid, livro, tipo, item))
+        for item, v in [('Artigos de Papelaria', 100), ('Materiais de Escritório', 50)]:
+            conn.execute("INSERT INTO orcamento (cong_id,item,tipo,orcam_ano,orcam_mes,ano) VALUES (?,?,'Saída',?,0,2030)", (cid, item, v))
+    appmod.init_db()
+    with appmod.get_db() as conn:
+        itens = sorted((r['livro'], r['item']) for r in conn.execute('SELECT livro, item FROM transacoes WHERE ano=2030').fetchall())
+        orc = [(r['item'], r['orcam_ano']) for r in conn.execute('SELECT * FROM orcamento WHERE ano=2030').fetchall()]
+    assert itens == [('FundoLocal', 'Outras Despesas'), ('FundoLocal', 'Votos'), ('Projetos', 'Votos para Projetos')]
+    assert orc == [('Papelaria e Escritório', 150)]
+    todos = [i for lv in appmod.CATEGORIAS.values() for t in lv.values() for i in t]
+    assert 'Serviços Públicos (água, luz)' not in todos and 'Conta de Água' in todos and 'Conta de Luz' in todos

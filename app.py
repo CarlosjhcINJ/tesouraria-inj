@@ -168,6 +168,9 @@ def _add_col(conn, table, col, ddl):
 
 def init_db():
     conn = get_db()
+    if db.IS_PG:
+        # O gunicorn sobe 2 processos ao mesmo tempo: só um migra o banco por vez (o outro espera)
+        conn.execute('SELECT pg_advisory_xact_lock(727001)')
     PK, BLOB, MONEY = db.PK, db.BLOB, db.MONEY
     stmts = [
         f'''CREATE TABLE IF NOT EXISTS congregacoes (

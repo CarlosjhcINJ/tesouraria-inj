@@ -71,11 +71,12 @@
         </div>
 
         <div class="dizimo-result mb-4">
-          <div class="dr-label">Prévia da divisão</div>
-          <div class="d-flex justify-content-between mt-2"><span>Dízimo dos Dízimos 10%</span><span id="pvDD">R$ 0,00</span></div>
-          <div class="d-flex justify-content-between"><span>Nivelação 5%</span><span id="pvNiv">R$ 0,00</span></div>
-          <div class="d-flex justify-content-between"><span>Betel 4%</span><span id="pvBetel">R$ 0,00</span></div>
-          <div class="d-flex justify-content-between"><span>Fundo local</span><span id="pvFL">R$ 0,00</span></div>
+          <div class="dr-label">Prévia da divisão{% if comp %} · {{ comp.categoria | capitalize }}{% endif %}</div>
+          <div class="small mb-2" style="opacity:.75">Em cascata: cada parte sai do que sobrou da anterior.</div>
+          <div class="d-flex justify-content-between mt-2"><span>Dízimo dos Dízimos {{ (reg.get('pct_dizimo_dizimos', 0.10) * 100) | round(0) | int }}%<small class="d-block" style="opacity:.7">sobre o bruto <span id="bDD">R$ 0,00</span></small></span><span id="pvDD">R$ 0,00</span></div>
+          <div class="d-flex justify-content-between mt-1"><span>Nivelação {% if comp and comp.nivelacao %}{{ (reg.get('pct_nivelacao', 0.05) * 100) | round(0) | int }}%<small class="d-block" style="opacity:.7">sobre o bruto <span id="bNiv">R$ 0,00</span></small>{% else %}<small class="d-block" style="opacity:.7">não se aplica a esta congregação</small>{% endif %}</span><span id="pvNiv">R$ 0,00</span></div>
+          <div class="d-flex justify-content-between mt-1"><span>Betel {% if comp and comp.betel %}{{ (reg.get('pct_betel', 0.04) * 100) | round(0) | int }}%<small class="d-block" style="opacity:.7">sobre <span id="bBetel">R$ 0,00</span> (bruto − dízimos − nivelação)</small>{% else %}<small class="d-block" style="opacity:.7">não se aplica a esta congregação</small>{% endif %}</span><span id="pvBetel">R$ 0,00</span></div>
+          <div class="d-flex justify-content-between mt-1"><span>Fundo local {{ comp.fundo_local_pct if comp else 0 }}%<small class="d-block" style="opacity:.7">sobre <span id="bFL">R$ 0,00</span> (o que sobrou depois do Betel)</small></span><span id="pvFL">R$ 0,00</span></div>
           <hr style="border-color:rgba(255,255,255,0.2)"/>
           <div class="d-flex justify-content-between fw-bold"><span>Sustento pastoral</span><span id="pvLiq">R$ 0,00</span></div>
         </div>
@@ -154,17 +155,22 @@
     const r2 = v => Math.round(v * 100) / 100;
     const brl = v => v.toLocaleString('pt-BR', {style: 'currency', currency: 'BRL'});
     const el = id => document.getElementById(id);
-    el('dizimoBruto').addEventListener('input', function () {
-      let t = this.value.replace(/[^\d.,]/g, '');
-      if (t.includes(',')) t = t.replace(/\./g, '').replace(',', '.');
-      const b = parseFloat(t) || 0;
+    const ler = v => { let t = (v || '').replace(/[^\d.,]/g, '');
+      if (/^\d+\.\d{1,2}$/.test(t)) return parseFloat(t) || 0;
+      return parseFloat(t.replace(/\./g, '').replace(',', '.')) || 0; };
+    const put = (id, v) => { const e = el(id); if (e) e.textContent = brl(v); };
+    function calcular() {
+      const b = ler(el('dizimoBruto').value);
       const vdd = r2(b * dd), vniv = comp.nivelacao ? r2(b * niv) : 0;
-      const vbet = comp.betel ? r2((b - vdd - vniv) * betel) : 0;
-      const vfl = r2(b * comp.fundo_local_pct / 100);
-      el('pvDD').textContent = brl(vdd); el('pvNiv').textContent = brl(vniv);
-      el('pvBetel').textContent = brl(vbet); el('pvFL').textContent = brl(vfl);
-      el('pvLiq').textContent = brl(r2(b - vdd - vniv - vbet - vfl));
-    });
+      const baseBetel = r2(b - vdd - vniv);
+      const vbet = comp.betel ? r2(baseBetel * betel) : 0;
+      const baseFL = r2(baseBetel - vbet);
+      const vfl = r2(baseFL * comp.fundo_local_pct / 100);
+      put('bDD', b); put('bNiv', b); put('bBetel', baseBetel); put('bFL', baseFL);
+      put('pvDD', vdd); put('pvNiv', vniv); put('pvBetel', vbet); put('pvFL', vfl);
+      put('pvLiq', r2(baseFL - vfl));
+    }
+    el('dizimoBruto').addEventListener('input', calcular); calcular();
   })();
 </script>
 {% endif %}

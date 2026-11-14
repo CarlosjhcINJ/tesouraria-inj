@@ -122,10 +122,12 @@ def liquidar_dizimo(bruto, comp, reg):
     niv = r2(bruto * reg['pct_nivelacao']) if comp['nivelacao'] else 0.0
     base_betel = r2(bruto - dd - niv)
     betel = r2(base_betel * reg['pct_betel']) if comp['betel'] else 0.0
-    fundo_local = r2(bruto * comp['fundo_local_pct'] / 100)
+    # Fundo local: residual. O % do ano incide sobre o que sobra depois do Dízimo dos Dízimos, da Nivelação e do Betel.
+    base_fl = r2(base_betel - betel)
+    fundo_local = r2(base_fl * comp['fundo_local_pct'] / 100)
     liquido = r2(bruto - dd - niv - betel - fundo_local)
     return {'bruto': r2(bruto), 'dd': dd, 'niv': niv, 'base_betel': base_betel, 'betel': betel,
-            'fundo_local': fundo_local, 'liquido': liquido}
+            'base_fl': base_fl, 'fundo_local': fundo_local, 'liquido': liquido}
 
 
 def fechar_mes(bruto, comp, envios, reg):

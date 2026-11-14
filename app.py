@@ -81,40 +81,39 @@ CATEGORIAS = {
             'Of. Domingo E.B.D.', 'Of. na Refam', 'Of. Social (Casos Especiais)',
             'Oferta de Cavalheiros', 'Oferta de Música', 'Oferta de Obra Social',
             'Outras Ofertas', 'Parceiros Missionários', 'Voto do Talento',
-            'Votos', 'Votos para Construção', 'Oferta das Crianças', 'Doações', 'Rendimentos Bancários',
+            'Votos', 'Oferta das Crianças', 'Doações', 'Rendimentos Bancários',
         ]),
         'Saída': sorted([
             'Aluguel de Casa Pastoral', 'Aluguel de Caçamba',
             'Aluguel de Máquina de Construção', 'Aluguel do Salão', 'Atividades Legais',
-            'Ajuda ao Pastor Auxiliar', 'Cafeteria / Restaurante', 'Completar uma Oferta',
+            'Ajuda ao Pastor Auxiliar', 'Completar uma Oferta',
             'Compra de Instrumentos', 'Compra de Materiais de Construção',
-            'Compra de Som', 'Compra de Utensílios de Limpeza',
-            'Artigos de Papelaria', 'Botijão de Gás',
-            'Construção e Reforma', 'Documentação e Escrituras', 'Evangelismo', 'Eventos',
+            'Compra de Som', 'Botijão de Gás',
+            'Construção e Reforma', 'Documentação e Escrituras', 'Evangelismo',
             'Eventos e Alimentação', 'Manutenção da Cozinha',
             'Manutenção de Equipamento', 'Manutenção do Prédio',
-            'Manutenção de Som', 'Materiais de Escritório',
+            'Manutenção de Som', 'Papelaria e Escritório',
             'Obra Social', 'Outras Compras para o Templo',
-            'Outros Fundo Local', 'Pagamento de Parcela', 'Internet', 'Mão de Obra',
+            'Outras Despesas', 'Pagamento de Parcela', 'Internet', 'Mão de Obra',
             'Produtos de Limpeza', 'Projetos da Diretoria Local',
-            'Serviços Públicos (água, luz)', 'Trabalho com Crianças', 'Trabalho com Damas',
+            'Trabalho com Crianças', 'Trabalho com Damas',
             'Trabalho com Jovens', 'Transporte Urbano', 'Viagens', 'Viagem para Assembleia',
             'Conta de Água', 'Conta de Luz', 'Telefone', 'Tarifas Bancárias', 'IPTU da Igreja',
             'Ajuda ao Departamento (EBI)', 'Visitas Pastorais', 'Poupança para Assembleia de Pastores',
-            'Transferência para o Fundo de Construção', 'Vários',
+            'Transferência para o Fundo de Construção',
         ]),
     },
     'Projetos': {
         'Entrada': sorted([
             'Atividades - Cantina', 'Brechó', 'Eventos', 'Fundo de Transporte',
-            'Outras Entradas de Projetos', 'Vendas', 'Votos', 'Votos para Construção',
+            'Outras Entradas de Projetos', 'Vendas', 'Votos para Projetos', 'Votos para Construção',
         ]),
         'Saída': sorted([
             'Aluguel de Caçamba', 'Aluguel de Máquina de Construção',
             'Compra de Instrumentos', 'Compra de Materiais de Construção',
             'Compra de Som', 'Manutenção do Prédio', 'Manutenção de Som',
             'Outras Compras para o Templo', 'Outras Saídas de Projetos',
-            'Pagamento de Parcela', 'Mão de Obra', 'Compra de Utensílios de Limpeza', 'Eventos e Alimentação',
+            'Pagamento de Parcela', 'Mão de Obra', 'Produtos de Limpeza', 'Eventos e Alimentação',
         ]),
     },
     'Envios': {
@@ -251,6 +250,22 @@ def init_db():
                         WHERE o2.cong_id=orcamento.cong_id AND o2.tipo=orcamento.tipo AND o2.ano=orcamento.ano AND o2.item=?)''',
                      (novo, velho, novo))
 
+    for livro, tipo, velho, novo in ITENS_UNIFICADOS:
+        filtro, args = ('AND livro=?', (livro,)) if livro else ('', ())
+        conn.execute(f'UPDATE transacoes SET item=? WHERE item=? AND tipo=? {filtro}', (novo, velho, tipo, *args))
+        if livro:   # orçamento é por item: o nome velho segue valendo para os outros livros
+            continue
+        for o in conn.execute('SELECT * FROM orcamento WHERE item=? AND tipo=?', (velho, tipo)).fetchall():
+            alvo = conn.execute('SELECT * FROM orcamento WHERE cong_id=? AND ano=? AND tipo=? AND item=?',
+                                (o['cong_id'], o['ano'], tipo, novo)).fetchone()
+            if alvo:
+                conn.execute('UPDATE orcamento SET orcam_ano=?, orcam_mes=? WHERE id=?',
+                             ((alvo['orcam_ano'] or 0) + (o['orcam_ano'] or 0), (alvo['orcam_mes'] or 0) + (o['orcam_mes'] or 0),
+                              alvo['id']))
+                conn.execute('DELETE FROM orcamento WHERE id=?', (o['id'],))
+            else:
+                conn.execute('UPDATE orcamento SET item=? WHERE id=?', (novo, o['id']))
+
     # Regras e dados da conta nacional
     for chave, valor, vig in R.REGRAS_PADRAO:
         conn.execute('INSERT INTO regras (chave, valor, vigencia) VALUES (?,?,?) ON CONFLICT (chave, vigencia) DO NOTHING',
@@ -308,6 +323,22 @@ ITENS_RENOMEADOS = {
     'Viaticos assambleia': 'Viagem para Assembleia', 'Brechós': 'Brechó', 'Outros Entradas de Projetos': 'Outras Entradas de Projetos',
     'Transferência para o fundo de construção': 'Transferência para o Fundo de Construção',
 }
+
+
+# Itens repetidos unificados (nov/2026). (livro ou None, tipo, nome velho) -> nome único
+ITENS_UNIFICADOS = [
+    (None, 'Saída', 'Compra de Utensílios de Limpeza', 'Produtos de Limpeza'),
+    (None, 'Saída', 'Cafeteria / Restaurante', 'Eventos e Alimentação'),
+    (None, 'Saída', 'Eventos', 'Eventos e Alimentação'),
+    (None, 'Saída', 'Artigos de Papelaria', 'Papelaria e Escritório'),
+    (None, 'Saída', 'Materiais de Escritório', 'Papelaria e Escritório'),
+    (None, 'Saída', 'Outros Fundo Local', 'Outras Despesas'),
+    (None, 'Saída', 'Vários', 'Outras Despesas'),
+    ('Projetos', 'Entrada', 'Votos', 'Votos para Projetos'),
+]
+# Nomes que não se oferecem mais, mas continuam válidos nos lançamentos antigos (não dá para separar sozinho)
+ITENS_LEGADO = {'Serviços Públicos (água, luz)': 'antigo: use Conta de Água ou Conta de Luz',
+                'Votos para Construção': 'no caixa local; os novos vão em Projetos'}
 
 
 CONTA_NACIONAL_PADRAO = {
@@ -1385,7 +1416,9 @@ def editar_lancamento(tid):
                 abort(403)
             try:
                 livro, tipo, item = request.form['livro'], request.form['tipo'], request.form['item']
-                if livro not in CATEGORIAS or tipo not in ('Entrada', 'Saída') or item not in CATEGORIAS[livro][tipo]:
+                antigo_ok = item == t['item'] and livro == t['livro'] and tipo == t['tipo']
+                if livro not in CATEGORIAS or tipo not in ('Entrada', 'Saída') or (
+                        item not in CATEGORIAS[livro][tipo] and not antigo_ok):
                     raise ValueError('Escolha o livro, o tipo e o item da lista.')
                 valor = parse_valor(request.form['valor'])
                 mes, ano = request.form['mes'], int(request.form['ano'])

@@ -26,7 +26,7 @@
 <a href="{{ url_for('admin') if congs else url_for('admin_nova_cong') }}" class="guia {{ 'guia-entrada guia-grande' if not congs else '' }} mb-3">
   <span class="guia-num">1</span>
   <span class="guia-txt"><b><i class="bi bi-people me-1"></i>{{ 'Cadastrar a primeira congregação' if not congs else 'Congregações e usuários' }}</b>
-    <small>{% if congs %}{{ congs | length }} congregação(ões) e {{ n_users }} usuário(s) locais. Criar congregação, tesoureiro e pastor; trocar senha; desativar quem saiu.{% else %}Cadastre a congregação com o tesoureiro e o pastor (ou um só usuário, se o pastor também for o tesoureiro).{% endif %}</small></span>
+    <small>{% if congs %}{{ congs | length }} congregação(ões) e {{ n_users }} usuário(s) locais. Enviar o link para os pastores se cadastrarem, trocar senha, arquivar testes e desativar quem saiu.{% else %}Envie o link para os pastores: cada um cadastra a congregação e convida o tesoureiro.{% endif %}</small></span>
   <i class="bi bi-chevron-right"></i>
 </a>
 

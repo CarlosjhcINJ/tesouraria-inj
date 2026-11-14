@@ -1723,7 +1723,7 @@ def calcular_mes(conn, cid, ano, mes):
     reg = regras_em(conn, f'{ano}-{mes:02d}-01')
     if not comp:
         return None, reg
-    return R.fechar_mes(float(bruto), comp, envios, reg), reg
+    return R.fechar_mes(float(bruto), comp, envios, reg, mes), reg
 
 
 def _lancar_fechamento(conn, cid, f_id, ano, mes, calc):
@@ -2549,6 +2549,9 @@ def nacional_regras():
                     return redirect(url_for('nacional_regras'))
                 if chave not in R.REGRAS_ROTULOS:
                     abort(400)
+                if chave == 'mes_investimento' and (valor != int(valor) or not 1 <= valor <= 12):
+                    flash('O mês do fundo de investimento precisa ser um número de 1 a 12.', 'danger')
+                    return redirect(url_for('nacional_regras'))
                 conn.execute('INSERT INTO regras (chave, valor, vigencia, criado_por) VALUES (?,?,?,?) '
                              'ON CONFLICT (chave, vigencia) DO UPDATE SET valor=excluded.valor, criado_por=excluded.criado_por',
                              (chave, valor, vig, session['user_id']))

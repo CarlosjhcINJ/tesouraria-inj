@@ -757,3 +757,13 @@ def test_forma_no_recibo():
     assert A.forma_recibo('Pix') == 'PIX'
     assert A.forma_recibo('Transferência') == 'Transferência'
     assert A.forma_recibo('') == ''
+
+
+def test_fundo_investimento_so_em_outubro():
+    import regras as R
+    reg = {'salario_minimo': 1621.0, 'pct_dizimo_dizimos': 0.10, 'pct_nivelacao': 0.05, 'pct_betel': 0.04,
+           'min_invest_formada': 500.0, 'mes_investimento': 10}
+    comp = {'categoria': 'formada', 'nivelacao': 1, 'betel': 1, 'fundo_local_pct': 3}
+    aviso = lambda mes: any('investimento' in a for a in R.fechar_mes(5000, comp, {}, reg, mes)['avisos'])
+    assert not aviso(5)
+    assert aviso(10)

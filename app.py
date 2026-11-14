@@ -228,8 +228,19 @@ def init_db():
         f'''CREATE TABLE IF NOT EXISTS login_falhas (
             id {PK}, chave TEXT NOT NULL, quando TIMESTAMP DEFAULT CURRENT_TIMESTAMP)''',
     ]
+    if db.IS_PG:
+        # No Postgres, REAL tem só ~7 dígitos (1.234.567,89 virava 1.234.567,88/90). Valores em dupla precisão.
+        stmts = [st.replace(' REAL', ' DOUBLE PRECISION') for st in stmts]
     for s in stmts:
         conn.execute(s)
+
+    # Bancos já criados com REAL (precisão simples): passa para dupla precisão, arredondando aos centavos
+    if db.IS_PG:
+        for r in conn.execute("SELECT table_name AS t, column_name AS c FROM information_schema.columns "
+                              "WHERE table_schema = current_schema() AND data_type = 'real'").fetchall():
+            centavos = r['t'] != 'regras' and not r['c'].startswith('pct')
+            uso = f"ROUND({r['c']}::numeric, 2)::double precision" if centavos else f"{r['c']}::double precision"
+            conn.execute(f"ALTER TABLE {r['t']} ALTER COLUMN {r['c']} TYPE DOUBLE PRECISION USING {uso}")
 
     # Colunas novas em bancos antigos
     _add_col(conn, 'transacoes', 'origem', 'TEXT')

@@ -68,8 +68,8 @@ def test_fechamento_vila_ramos_setembro():
               'Of. Distrital': 150.00, 'Voto Pastor': 50.00}
     calc = R.fechar_mes(7736.47, comp, envios, reg)
     liq = calc['liquidacao']
-    assert (liq['dd'], liq['niv'], liq['betel'], liq['fundo_local']) == (773.65, 386.82, 263.04, 232.09)
-    assert liq['liquido'] == 6080.87
+    assert (liq['dd'], liq['niv'], liq['betel'], liq['fundo_local']) == (773.65, 386.82, 263.04, 189.39)
+    assert liq['liquido'] == 6123.57
     assert calc['total'] == 3014.11   # igual ao relatório e ao comprovante reais
     assert any('Fundo de investimento' in a for a in calc['avisos'])
 
@@ -145,8 +145,8 @@ def test_fluxo_completo(app):
         gerados = conn.execute('SELECT * FROM transacoes WHERE origem=?', (f"fechamento:{f['id']}",)).fetchall()
     itens = {g['item']: g['valor'] for g in gerados}
     assert itens['Envio Dízimo dos Dízimos 10%'] == 773.65
-    assert itens['Aporte ao fundo local'] == 232.09
-    assert itens['Sustento pastoral (§ 66)'] == 6080.87
+    assert itens['Aporte ao fundo local'] == 189.39  # fundo local residual: 3% de (bruto − DD − nivelação − Betel)
+    assert itens['Sustento pastoral (§ 66)'] == 6123.57
 
     # relatório econômico e comprovante
     rel = tes.get(f"/fechamento/{f['id']}/relatorio").get_data(as_text=True)

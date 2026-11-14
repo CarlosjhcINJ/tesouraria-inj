@@ -13,7 +13,15 @@ from flask import (Flask, render_template, request, redirect, url_for,
 from werkzeug.security import generate_password_hash, check_password_hash
 from functools import wraps
 from datetime import datetime, date, timedelta, timezone
-import os, io, re, json, hashlib, hmac, secrets
+import os, io, re, json, hashlib, hmac, secrets, time, unicodedata
+
+# Horário de Brasília para datas, recibos e livros (o servidor roda em UTC).
+# "<-03>3" é o fuso fixo de -3h; não depende dos arquivos de fuso do servidor (o Brasil não tem horário de verão desde 2019).
+os.environ['TZ'] = os.environ.get('APP_TZ', '<-03>3')
+try:
+    time.tzset()
+except AttributeError:   # Windows
+    pass
 
 import db
 import regras as R
@@ -542,14 +550,78 @@ def mes_travado(conn, cid, ano, mes_nome):
                         (cid, int(ano), R.mes_num(mes_nome))).fetchone()
 
 
-def parse_valor(txt):
-    txt = (txt or '').strip().replace('R$', '').replace(' ', '')
-    if ',' in txt:
-        txt = txt.replace('.', '').replace(',', '.')
-    v = float(txt)
-    if v < 0 or v > 10_000_000:
-        raise ValueError('valor fora do limite')
-    return round(v, 2)
+_RE_BR_MILHAR = re.compile(r'^\d{1,3}(\.\d{3})+(,\d{1,2})?$')   # 1.234 ou 1.234,56
+_RE_BR = re.compile(r'^\d+(,\d{1,2})?$')                         # 1234 ou 1234,56
+_RE_PONTO_DECIMAL = re.compile(r'^\d+\.\d{1,2}$')                 # 85.50 (teclado numérico do celular)
+
+
+def parse_valor(txt, minimo=None):
+    """Lê um valor em reais. Aceita 1.234,56 · 1234,56 · 1234 · 85.50. Recusa formatos ambíguos
+    (1,234.56), mais de 2 casas decimais e valores abaixo do mínimo, em vez de adivinhar."""
+    t = (txt or '').strip().replace('R$', '').replace(' ', '').replace('\xa0', '')
+    if not t:
+        raise ValueError('Informe o valor.')
+    if t.startswith('-'):
+        raise ValueError('O valor não pode ser negativo.')
+    if _RE_BR_MILHAR.match(t) or _RE_BR.match(t):
+        v = float(t.replace('.', '').replace(',', '.'))
+    elif _RE_PONTO_DECIMAL.match(t):
+        v = float(t)
+    else:
+        raise ValueError(f'Não entendi o valor "{txt}". Escreva como 1.234,56 (ponto nos milhares e vírgula nos centavos).')
+    if v > 10_000_000:
+        raise ValueError('Valor acima do limite de R$ 10.000.000,00.')
+    v = round(v, 2)
+    if minimo is not None and v < minimo:
+        raise ValueError(f'O valor precisa ser de pelo menos {fmt_brl(minimo)}.')
+    return v
+
+
+def validar_data(txt, ano, mes_nome, obrigatoria=False):
+    """Data do lançamento (dd/mm/aaaa): tem que existir e estar perto do mês contábil.
+    Devolve (data_formatada, avisos). Data futura ou de outro mês passa, com aviso."""
+    t = (txt or '').strip()
+    if not t:
+        if obrigatoria:
+            raise ValueError('Informe a data.')
+        return '', []
+    try:
+        d = datetime.strptime(t, '%d/%m/%Y').date()
+    except ValueError:
+        raise ValueError(f'A data "{t}" não existe. Use dd/mm/aaaa, por exemplo 05/11/2026.')
+    if abs(d.year - int(ano)) > 1:
+        raise ValueError(f'A data {d:%d/%m/%Y} está longe demais do ano do lançamento ({ano}). Confira o ano.')
+    avisos = []
+    if d > date.today():
+        avisos.append(f'A data {d:%d/%m/%Y} está no futuro. Confira se não é erro de digitação.')
+    elif mes_nome in MESES and (d.year, d.month) != (int(ano), MESES.index(mes_nome) + 1):
+        avisos.append(f'A data {d:%d/%m/%Y} não é de {mes_nome}/{ano}, o mês do lançamento. Confira se está certo.')
+    return d.strftime('%d/%m/%Y'), avisos
+
+
+def ano_arg(padrao=None, nome='ano'):
+    """Ano vindo da URL ou do formulário; se vier inválido (ex.: ano=abc), usa o padrão em vez de quebrar a página."""
+    try:
+        pad = int(padrao) if padrao not in (None, '') else date.today().year
+    except (TypeError, ValueError):
+        pad = date.today().year
+    try:
+        a = int(request.values.get(nome, pad))
+    except (TypeError, ValueError):
+        return pad
+    return a if ANOS[0] <= a <= ANOS[-1] else pad
+
+
+def mes_arg(padrao, minimo=1):
+    try:
+        m = int(request.args.get('mes', padrao) or padrao)
+    except (TypeError, ValueError):
+        return padrao
+    return m if minimo <= m <= 12 else padrao
+
+
+def sem_acento(txt):
+    return ''.join(c for c in unicodedata.normalize('NFD', str(txt or '')) if unicodedata.category(c) != 'Mn').lower()
 
 
 def saldos_livros(conn, cid, ano, cfg=None, projetar=False):
@@ -841,6 +913,17 @@ def admin_codigo_pastores():
     return redirect(url_for('admin'))
 
 
+@app.errorhandler(ValueError)
+def _dado_invalido(e):
+    """Um dado inválido na URL ou no formulário não derruba a página (era erro 500)."""
+    app.logger.warning('Dado inválido em %s: %s', request.path, e)
+    if request.method == 'POST' and request.referrer and request.referrer.startswith(request.host_url):
+        flash('Algum dado do formulário veio inválido. Confira e tente de novo.', 'danger')
+        return redirect(request.referrer)
+    return ('<p style="font-family:sans-serif;padding:24px">Endereço com dado inválido. '
+            '<a href="/inicio">Voltar ao início</a></p>', 400)
+
+
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if session.get('user_id'):
@@ -938,8 +1021,8 @@ def dashboard():
     cfg = get_cfg()
     cid = get_cong_id()
     hoje = date.today()
-    ano = int(request.args.get('ano', hoje.year))
-    mes = int(request.args.get('mes', hoje.month))
+    ano = ano_arg(hoje.year)
+    mes = mes_arg(hoje.month)
     nome_mes = MESES[mes - 1]
     with get_db() as conn:
         def soma(where, params):
@@ -988,7 +1071,7 @@ def visao_geral():
 def _visao_geral_antiga():
     cfg = get_cfg()
     cid = get_cong_id()
-    ano = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
+    ano = ano_arg(cfg.get('ano_atual', datetime.now().year))
     with get_db() as conn:
         base = 'FROM transacoes WHERE cong_id=? AND ano=? AND COALESCE(transferencia,0)=0'
         totais = conn.execute(f'SELECT tipo, COALESCE(SUM(valor),0) AS total {base} GROUP BY tipo', (cid, ano)).fetchall()
@@ -1064,7 +1147,7 @@ def _voltar_lancar(**extra):
 def lancamentos():
     cfg = get_cfg()
     cid = get_cong_id()
-    ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
+    ano_sel = ano_arg(cfg.get('ano_atual', datetime.now().year))
     mes_sel = request.args.get('mes', '')
     livro_sel = request.args.get('livro', '')
 
@@ -1075,14 +1158,16 @@ def lancamentos():
             livro, tipo, item = request.form['livro'], request.form['tipo'], request.form['item']
             if livro not in CATEGORIAS or tipo not in ('Entrada', 'Saída') or item not in CATEGORIAS[livro][tipo]:
                 raise ValueError('Escolha o livro, o tipo e o item da lista.')
-            valor = parse_valor(request.form['valor'])
+            valor = parse_valor(request.form['valor'], minimo=0.01)
             mes, ano = request.form['mes'], int(request.form['ano'])
             if mes not in MESES:
                 raise ValueError('Mês inválido.')
+            data_reg, avisos_data = validar_data(request.form.get('data_registro') or date.today().strftime('%d/%m/%Y'),
+                                                 ano, mes)
             forma = request.form.get('forma')
             partes = [(valor, forma if forma in FORMAS else None)]
             if forma == 'Dinheiro + Pix':
-                pix = parse_valor(request.form.get('valor_pix', '') or '0')
+                pix = parse_valor(request.form.get('valor_pix', ''), minimo=0.01)
                 if not 0 < pix < valor:
                     raise ValueError('Informe quanto entrou em Pix: tem que ser maior que zero e menor que o total.')
                 partes = [(round(valor - pix, 2), 'Dinheiro'), (pix, 'Pix')]
@@ -1111,8 +1196,7 @@ def lancamentos():
                 obs_parte = obs if len(partes) == 1 else (f'{obs} · ' if obs else '') + f'parte em {f_parte} de {fmt_brl(valor)}'
                 novo = conn.insert('''INSERT INTO transacoes (cong_id,livro,tipo,item,valor,mes,ano,data_registro,obs,forma,usuario_id,pessoa)
                                       VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
-                                   (cid, livro, tipo, item, v_parte, mes, ano,
-                                    request.form.get('data_registro', datetime.now().strftime('%d/%m/%Y')),
+                                   (cid, livro, tipo, item, v_parte, mes, ano, data_reg,
                                     obs_parte[:300], f_parte, session['user_id'], request.form.get('pessoa', '').strip()[:120] or None))
                 tid = tid or novo
                 if len(partes) > 1:
@@ -1127,6 +1211,8 @@ def lancamentos():
             flash(msg, 'warning')
         else:
             flash(msg, 'success')
+        for a in avisos_data:
+            flash(a, 'warning')
         if request.form.get('voltar') == 'lancar':
             return redirect(url_for('lancar', tipo=tipo, ultimo=tid))
         return redirect(url_for('lancamentos', ano=ano, mes=mes))
@@ -1213,9 +1299,9 @@ def livro_do_mes():
     cfg = get_cfg()
     cid = get_cong_id()
     hoje = date.today()
-    ano = int(request.args.get('ano', hoje.year))
+    ano = ano_arg(hoje.year)
     anual = request.args.get('periodo') == 'ano'
-    mes = 12 if anual else int(request.args.get('mes', hoje.month))
+    mes = 12 if anual else mes_arg(hoje.month)
     if not 1 <= mes <= 12:
         abort(400)
     nome_mes = MESES[mes - 1]
@@ -1319,8 +1405,8 @@ def recibo(tipo, rid):
 def imprimir():
     cid = get_cong_id()
     hoje = date.today()
-    ano = int(request.args.get('ano', hoje.year))
-    mes = int(request.args.get('mes', hoje.month))
+    ano = ano_arg(hoje.year)
+    mes = mes_arg(hoje.month)
     with get_db() as conn:
         fechs = conn.execute('SELECT * FROM fechamentos WHERE cong_id=? AND ano=? ORDER BY mes', (cid, ano)).fetchall()
         recentes = conn.execute('SELECT * FROM transacoes WHERE cong_id=? AND origem IS NULL ORDER BY id DESC LIMIT 10',
@@ -1336,8 +1422,8 @@ def balanco():
     cfg = get_cfg()
     cid = get_cong_id()
     hoje = date.today()
-    ano = int(request.args.get('ano', hoje.year))
-    mes = int(request.args.get('mes', 0) or 0)
+    ano = ano_arg(hoje.year)
+    mes = mes_arg(0, minimo=0)
     meses_sel = [MESES[mes - 1]] if 1 <= mes <= 12 else MESES
     anteriores = MESES[:mes - 1] if 1 <= mes <= 12 else []
     saldo_ano_ant = float(cfg.get('saldo_ano_anterior', 0) or 0)
@@ -1420,10 +1506,11 @@ def editar_lancamento(tid):
                 if livro not in CATEGORIAS or tipo not in ('Entrada', 'Saída') or (
                         item not in CATEGORIAS[livro][tipo] and not antigo_ok):
                     raise ValueError('Escolha o livro, o tipo e o item da lista.')
-                valor = parse_valor(request.form['valor'])
+                valor = parse_valor(request.form['valor'], minimo=0.01)
                 mes, ano = request.form['mes'], int(request.form['ano'])
                 if mes not in MESES:
                     raise ValueError('Mês inválido.')
+                data_reg, avisos_data = validar_data(request.form.get('data_registro', ''), ano, mes)
             except (ValueError, KeyError) as e:
                 flash(str(e) or 'Confira os campos.', 'danger')
                 return redirect(url_for('editar_lancamento', tid=tid))
@@ -1431,12 +1518,14 @@ def editar_lancamento(tid):
                 flash('O mês está fechado. Peça ao pastor para reabrir antes de corrigir.', 'danger')
                 return redirect(url_for('lancamentos', ano=t['ano']))
             novo = dict(livro=livro, tipo=tipo, item=item, valor=valor, mes=mes, ano=ano,
-                        data_registro=request.form.get('data_registro', ''), obs=request.form.get('obs', '')[:300],
+                        data_registro=data_reg, obs=request.form.get('obs', '')[:300],
                         pessoa=request.form.get('pessoa', '').strip()[:120] or None)
             conn.execute('''UPDATE transacoes SET livro=?,tipo=?,item=?,valor=?,mes=?,ano=?,data_registro=?,obs=?,pessoa=?
                             WHERE id=? AND cong_id=?''', (*novo.values(), tid, cid))
             auditar(conn, 'lancamento.editar', f'Lançamento #{tid}', antes=dict(t), depois=novo)
             flash('Lançamento atualizado. A alteração ficou registrada no histórico.', 'success')
+            for a in avisos_data:
+                flash(a, 'warning')
             return redirect(url_for('lancamentos', ano=ano))
     return render_template('editar_lancamento.html', cfg=cfg, t=t, categorias=CATEGORIAS, meses=MESES,
                            anos=ANOS, livros=LIVROS, livros_labels=LIVROS_LABELS)
@@ -1527,17 +1616,19 @@ def liquidacao_por_mes(conn, cid, ano, meses=None):
 def dizimos():
     cfg = get_cfg()
     cid = get_cong_id()
-    ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
+    ano_sel = ano_arg(cfg.get('ano_atual', datetime.now().year))
     if request.method == 'POST':
         if not pode_editar():
             abort(403)
         try:
-            bruto = parse_valor(request.form['dizimo_bruto'])
+            bruto = parse_valor(request.form['dizimo_bruto'], minimo=0.01)
             mes, ano = request.form['mes'], int(request.form['ano'])
-            if mes not in MESES or bruto <= 0:
-                raise ValueError
-        except (ValueError, KeyError):
-            flash('Informe o valor e o mês do dízimo.', 'danger')
+            if mes not in MESES:
+                raise ValueError('Escolha o mês do dízimo.')
+            data_reg, avisos_data = validar_data(request.form.get('data_registro') or date.today().strftime('%d/%m/%Y'),
+                                                 ano, mes)
+        except (ValueError, KeyError) as e:
+            flash(str(e) if str(e) else 'Informe o valor e o mês do dízimo.', 'danger')
             return redirect(url_for('dizimos', ano=ano_sel))
         bloqueio = exigir_cadastro(ano)
         if bloqueio:
@@ -1554,9 +1645,11 @@ def dizimos():
                            VALUES (?,?,?,?,?,?,?,?,?,?,?,?)''',
                         (cid, bruto, reg['pct_dizimo_dizimos'] + (reg['pct_nivelacao'] if comp['nivelacao'] else 0),
                          comp['fundo_local_pct'] / 100, liq['dd'] + liq['niv'] + liq['betel'], liq['fundo_local'],
-                         liq['liquido'], mes, ano, request.form.get('data_registro', datetime.now().strftime('%d/%m/%Y')),
+                         liq['liquido'], mes, ano, data_reg,
                          request.form.get('obs', '')[:300], session['user_id']))
         flash(f'Dízimo de {fmt_brl(bruto)} registrado em {mes}.', 'success')
+        for a in avisos_data:
+            flash(a, 'warning')
         return redirect(url_for('dizimos', ano=ano))
 
     if pode_editar():
@@ -1641,9 +1734,9 @@ def fechamento():
     cfg = get_cfg()
     cid = get_cong_id()
     hoje = date.today()
-    ano = int(request.args.get('ano', cfg.get('ano_atual', hoje.year)))
+    ano = ano_arg(cfg.get('ano_atual', hoje.year))
     padrao_mes = hoje.month - 1 if hoje.month > 1 else 12
-    mes = int(request.args.get('mes', padrao_mes))
+    mes = mes_arg(padrao_mes)
     if not 1 <= mes <= 12:
         abort(400)
     with get_db() as conn:
@@ -1711,8 +1804,10 @@ def fechamento_comprovante(fid):
         if not f or f['status'] not in ('fechado', 'aprovado'):
             abort(400)
         try:
-            valor = parse_valor(request.form['valor'])
+            valor = parse_valor(request.form['valor'], minimo=0.01)
             data_dep = date.fromisoformat(request.form['data'])
+            if data_dep > date.today() or data_dep.year < date.today().year - 1:
+                raise ValueError('Confira a data do depósito: não pode ser no futuro.')
             anexo = _ler_anexo('arquivo')
             if not anexo:
                 raise ValueError('Anexe o comprovante do banco.')
@@ -1812,7 +1907,7 @@ def _carta_ctx(conn, cid, ano):
 def carta():
     cfg = get_cfg()
     cid = get_cong_id()
-    ano = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
+    ano = ano_arg(cfg.get('ano_atual', datetime.now().year))
     with get_db() as conn:
         ctx_c = _carta_ctx(conn, cid, ano)
     return render_template('carta.html', cfg=cfg, ano=ano, anos=ANOS, carta=ctx_c, nacional=config_nacional())
@@ -1838,7 +1933,7 @@ def carta_confirmar(ano):
 def orcamento():
     cfg = get_cfg()
     cid = get_cong_id()
-    ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
+    ano_sel = ano_arg(cfg.get('ano_atual', datetime.now().year))
     if request.method == 'POST':
         if not (tem_papel('tesoureiro') or tem_papel('pastor')):
             abort(403)
@@ -1912,49 +2007,48 @@ def orcamento():
 @app.route('/relatorio')
 @cong_required
 def relatorio():
+    """Relatório com filtros. Busca em item, pessoa e observação, sem diferenciar maiúsculas nem acentos.
+    Todos os quadros (lista, totais, por mês e por livro) usam exatamente os mesmos filtros."""
     cfg = get_cfg()
     cid = get_cong_id()
-    ano_sel = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
+    ano_sel = ano_arg(cfg.get('ano_atual', datetime.now().year))
     livro_sel = request.args.get('livro', '')
     tipo_sel = request.args.get('tipo', '')
-    item_sel = request.args.get('item', '')
+    item_sel = request.args.get('item', '').strip()
     mes_sel = request.args.get('mes', '')
     with get_db() as conn:
         q = 'SELECT * FROM transacoes WHERE cong_id=? AND ano=? AND COALESCE(transferencia,0)=0'
         p = [cid, ano_sel]
-        if livro_sel:
+        if livro_sel in LIVROS:
             q += ' AND livro=?'; p.append(livro_sel)
-        if tipo_sel:
+        if tipo_sel in ('Entrada', 'Saída'):
             q += ' AND tipo=?'; p.append(tipo_sel)
-        if item_sel:
-            q += ' AND item LIKE ?'; p.append(f'%{item_sel}%')
-        if mes_sel:
+        if mes_sel in MESES:
             q += ' AND mes=?'; p.append(mes_sel)
         q += f' ORDER BY {MES_ORDEM}, id'
         lista = conn.execute(q, p).fetchall()
-        total_e = sum(t['valor'] for t in lista if t['tipo'] == 'Entrada')
-        total_s = sum(t['valor'] for t in lista if t['tipo'] == 'Saída')
-        superavit = total_e - total_s
-        pct = round(superavit / total_e * 100, 2) if total_e > 0 else 0
-        resumo_mensal = []
-        for mes in MESES:
-            q2 = 'SELECT tipo, COALESCE(SUM(valor),0) AS t FROM transacoes WHERE cong_id=? AND ano=? AND mes=? AND COALESCE(transferencia,0)=0'
-            p2 = [cid, ano_sel, mes]
-            if livro_sel:
-                q2 += ' AND livro=?'; p2.append(livro_sel)
-            q2 += ' GROUP BY tipo'
-            rows = conn.execute(q2, p2).fetchall()
-            e = sum(r['t'] for r in rows if r['tipo'] == 'Entrada')
-            s = sum(r['t'] for r in rows if r['tipo'] == 'Saída')
-            if e > 0 or s > 0:
-                resumo_mensal.append({'mes': mes, 'entradas': e, 'saidas': s, 'saldo': e - s})
-        # por livro: inclui os repasses internos (ex.: aporte dos dízimos ao caixa local), senão o saldo do livro fica errado
-        resumo_livro = conn.execute('''SELECT livro,
-                   SUM(CASE WHEN tipo='Entrada' THEN valor ELSE 0 END) AS e,
-                   SUM(CASE WHEN tipo='Saída' THEN valor ELSE 0 END) AS s
-            FROM transacoes WHERE cong_id=? AND ano=? GROUP BY livro''', (cid, ano_sel)).fetchall()
         items_disp = conn.execute('SELECT DISTINCT item FROM transacoes WHERE cong_id=? AND ano=? ORDER BY item',
                                   (cid, ano_sel)).fetchall()
+    if item_sel:
+        termos = sem_acento(item_sel).split()
+        lista = [t for t in lista
+                 if all(x in sem_acento(f"{t['item']} {t.get('pessoa') or ''} {t.get('obs') or ''}") for x in termos)]
+    total_e = sum(t['valor'] for t in lista if t['tipo'] == 'Entrada')
+    total_s = sum(t['valor'] for t in lista if t['tipo'] == 'Saída')
+    superavit = total_e - total_s
+    pct = round(superavit / total_e * 100, 2) if total_e > 0 else 0
+    resumo_mensal = []
+    for mes in MESES:
+        e = sum(t['valor'] for t in lista if t['mes'] == mes and t['tipo'] == 'Entrada')
+        s_ = sum(t['valor'] for t in lista if t['mes'] == mes and t['tipo'] == 'Saída')
+        if e > 0 or s_ > 0:
+            resumo_mensal.append({'mes': mes, 'entradas': e, 'saidas': s_, 'saldo': e - s_})
+    resumo_livro = []
+    for lv in LIVROS:
+        e = sum(t['valor'] for t in lista if t['livro'] == lv and t['tipo'] == 'Entrada')
+        s_ = sum(t['valor'] for t in lista if t['livro'] == lv and t['tipo'] == 'Saída')
+        if e or s_:
+            resumo_livro.append({'livro': lv, 'e': e, 's': s_})
     return render_template('relatorio.html', cfg=cfg, anos=ANOS, meses=MESES, livros=LIVROS, livros_labels=LIVROS_LABELS,
         ano_sel=ano_sel, livro_sel=livro_sel, tipo_sel=tipo_sel, item_sel=item_sel, mes_sel=mes_sel, transacoes=lista,
         total_e=total_e, total_s=total_s, superavit=superavit, pct=pct, resumo_mensal=resumo_mensal,
@@ -1972,7 +2066,7 @@ def configuracoes():
     papel = session.get('papel')
     pode = tem_papel('tesoureiro') or tem_papel('pastor') or (papel == 'admin' and cid)
     cfg = get_cfg()
-    ano = int(request.values.get('ano', cfg.get('ano_atual') or date.today().year))
+    ano = ano_arg(cfg.get('ano_atual') or date.today().year)
     if request.method == 'POST':
         if not pode:
             abort(403)
@@ -2136,7 +2230,7 @@ def nacional_inicio():
 @papel_required('admin', 'supervisor')
 def nacional_envios():
     hoje = date.today()
-    ano = int(request.args.get('ano', hoje.year))
+    ano = ano_arg(hoje.year)
     with get_db() as conn:
         congs = conn.execute('SELECT * FROM congregacoes WHERE ativo=1 ORDER BY nome').fetchall()
         fechs = conn.execute('SELECT id, cong_id, mes, status, total, comprovante_data FROM fechamentos WHERE ano=?', (ano,)).fetchall()
@@ -2268,7 +2362,7 @@ def _livro_nacional(conn, ano):
 @app.route('/nacional/livro')
 @papel_required('admin', 'supervisor')
 def nacional_livro():
-    ano = int(request.args.get('ano', date.today().year))
+    ano = ano_arg(date.today().year)
     with get_db() as conn:
         lv = _livro_nacional(conn, ano)
     return render_template('nacional_livro.html', cfg=get_cfg(), ano=ano, anos=ANOS, lv=lv)
@@ -2280,7 +2374,7 @@ def nacional_livro_excel():
     import openpyxl
     from openpyxl.styles import Font, PatternFill, Alignment
     from openpyxl.utils import get_column_letter
-    ano = int(request.args.get('ano', date.today().year))
+    ano = ano_arg(date.today().year)
     with get_db() as conn:
         lv = _livro_nacional(conn, ano)
     NAVY = PatternFill('solid', fgColor='25307A')
@@ -2342,7 +2436,7 @@ def nacional_livro_excel():
 @app.route('/nacional/cartas', methods=['GET', 'POST'])
 @papel_required('admin')
 def nacional_cartas():
-    ano = int(request.values.get('ano', date.today().year + (1 if date.today().month >= 11 else 0)))
+    ano = ano_arg(date.today().year + (1 if date.today().month >= 11 else 0))
     with get_db() as conn:
         congs = conn.execute('SELECT * FROM congregacoes WHERE ativo=1 ORDER BY nome').fetchall()
         sm = regras_em(conn, f'{ano - 1}-12-31')['salario_minimo']
@@ -2664,7 +2758,7 @@ def exportar_excel():
     from openpyxl.utils import get_column_letter
     cfg = get_cfg()
     cid = get_cong_id()
-    ano = int(request.args.get('ano', cfg.get('ano_atual', datetime.now().year)))
+    ano = ano_arg(cfg.get('ano_atual', datetime.now().year))
     saldo_ini = float(cfg.get('saldo_ano_anterior', 0) or 0)
     with get_db() as conn:
         trans = conn.execute('SELECT * FROM transacoes WHERE cong_id=? AND ano=?', (cid, ano)).fetchall()

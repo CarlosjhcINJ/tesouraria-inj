@@ -97,7 +97,7 @@
         <form method="POST" action="{{ url_for('fechamento_comprovante', fid=f['id']) }}" enctype="multipart/form-data">
           <div class="row g-2 mb-2">
             <div class="col-6"><label class="form-label">Valor do comprovante</label>
-              <input type="text" name="valor" class="form-control" required inputmode="decimal" placeholder="0,00"/></div>
+              <input type="text" name="valor" data-reais class="form-control" required inputmode="decimal" placeholder="0,00"/></div>
             <div class="col-6"><label class="form-label">Data do depósito</label>
               <input type="date" name="data" class="form-control" required value="{{ now().strftime('%Y-%m-%d') }}"/></div>
           </div>

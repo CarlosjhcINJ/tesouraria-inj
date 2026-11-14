@@ -79,6 +79,8 @@ class Conn:
     def __init__(self):
         if IS_PG:
             self._c = psycopg.connect(DATABASE_URL, row_factory=dict_row)
+            # datas gravadas pelo banco (CURRENT_TIMESTAMP) no horário de Brasília
+            self._c.execute("SET TIME ZONE 'America/Sao_Paulo'")
         else:
             os.makedirs(os.path.dirname(SQLITE_PATH), exist_ok=True)
             self._c = sqlite3.connect(SQLITE_PATH, timeout=15)

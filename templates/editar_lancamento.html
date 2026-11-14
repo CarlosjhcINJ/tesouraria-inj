@@ -42,9 +42,8 @@
           <label class="form-label">Valor (R$)</label>
           <div class="input-group">
             <span class="input-group-text">R$</span>
-            <input type="text" name="valor" class="form-control" required
-                   value="{{ '%.2f' | format(t['valor']) | replace('.', ',') }}"
-                   oninput="formatBRL(this)"/>
+            <input type="text" name="valor" data-reais inputmode="decimal" class="form-control" required
+                   value="{{ (t['valor'] | brl)[3:] }}"/>
           </div>
         </div>
 
@@ -69,7 +68,7 @@
 
         <div class="mb-3">
           <label class="form-label">Data do Registro</label>
-          <input type="text" name="data_registro" class="form-control"
+          <input type="text" name="data_registro" data-data class="form-control"
                  value="{{ t['data_registro'] or '' }}" placeholder="dd/mm/aaaa"/>
         </div>
 

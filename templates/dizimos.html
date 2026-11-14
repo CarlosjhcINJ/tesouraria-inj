@@ -42,7 +42,7 @@
           <label class="form-label">Dízimo bruto (R$)</label>
           <div class="input-group">
             <span class="input-group-text">R$</span>
-            <input type="text" name="dizimo_bruto" id="dizimoBruto" class="form-control" placeholder="0,00" required inputmode="decimal"/>
+            <input type="text" name="dizimo_bruto" id="dizimoBruto" data-reais class="form-control" placeholder="0,00" required inputmode="decimal"/>
           </div>
           <div class="form-text">Pode registrar culto por culto; o fechamento soma o mês inteiro.</div>
         </div>
@@ -63,7 +63,7 @@
         </div>
         <div class="mb-3">
           <label class="form-label">Data</label>
-          <input type="text" name="data_registro" class="form-control" value="{{ now().strftime('%d/%m/%Y') }}" placeholder="dd/mm/aaaa"/>
+          <input type="text" name="data_registro" data-data class="form-control" value="{{ now().strftime('%d/%m/%Y') }}" placeholder="dd/mm/aaaa"/>
         </div>
         <div class="mb-3">
           <label class="form-label">Observação</label>

@@ -59,8 +59,8 @@
           <label class="form-label">Valor (R$)</label>
           <div class="input-group">
             <span class="input-group-text">R$</span>
-            <input type="text" name="valor" class="form-control"
-                   placeholder="0,00" required oninput="formatBRL(this)"/>
+            <input type="text" name="valor" data-reais inputmode="decimal" class="form-control"
+                   placeholder="0,00" required/>
           </div>
         </div>
 
@@ -86,7 +86,7 @@
 
         <div class="mb-3">
           <label class="form-label">Data do Registro</label>
-          <input type="text" name="data_registro" class="form-control"
+          <input type="text" name="data_registro" data-data class="form-control"
                  placeholder="dd/mm/aaaa"
                  value="{{ now().strftime('%d/%m/%Y') }}"/>
         </div>

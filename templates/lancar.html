@@ -126,11 +126,11 @@
         <div class="col-md-6">
           <label class="form-label">Valor (R$)</label>
           <div class="input-group input-group-lg"><span class="input-group-text">R$</span>
-            <input type="text" name="valor" id="valor" class="form-control" placeholder="0,00" required inputmode="decimal"/></div>
+            <input type="text" name="valor" id="valor" data-reais class="form-control" placeholder="0,00" required inputmode="decimal"/></div>
         </div>
         <div class="col-md-6">
           <label class="form-label">Data</label>
-          <input type="text" name="data_registro" class="form-control form-control-lg" value="{{ now().strftime('%d/%m/%Y') }}" placeholder="dd/mm/aaaa"/>
+          <input type="text" name="data_registro" data-data class="form-control form-control-lg" value="{{ now().strftime('%d/%m/%Y') }}" placeholder="dd/mm/aaaa"/>
         </div>
         <div class="col-6 col-md-3">
           <label class="form-label">Mês</label>
@@ -152,7 +152,7 @@
         <div class="col-md-6" id="caixa-pix" style="display:none">
           <label class="form-label">Quanto entrou em Pix?</label>
           <div class="input-group"><span class="input-group-text">R$</span>
-            <input type="text" name="valor_pix" id="valor_pix" class="form-control" placeholder="0,00" inputmode="decimal"/></div>
+            <input type="text" name="valor_pix" id="valor_pix" data-reais class="form-control" placeholder="0,00" inputmode="decimal"/></div>
           <div class="form-text">O resto do valor fica como dinheiro. O sistema registra as duas partes separadas, para bater com o caixa e com o banco.</div>
         </div>
         <script>

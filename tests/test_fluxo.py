@@ -55,7 +55,7 @@ def test_carta_vila_ramos_2026():
 def test_categorias_pela_entrada():
     reg = {'pct_dizimo_dizimos': .10, 'fator_formacao': 1 / 3, 'fator_nivelacao': 1.25}
     assert R.carta_anual([0] * 12, 1621, reg)['categoria'] == 'nova'
-    assert R.carta_anual([0] * 12, 1621, reg)['fundo_local_pct'] == 0
+    assert R.carta_anual([0] * 12, 1621, reg)['fundo_local_pct'] == 1
     assert R.carta_anual([500], 1621, reg)['categoria'] == 'projecao'
     assert R.carta_anual([600], 1621, reg)['categoria'] == 'formacao'
     assert R.carta_anual([1621], 1621, reg)['categoria'] == 'formada'
@@ -304,7 +304,7 @@ def test_recibo_configuracao_balanco_e_impressao(app):
     tes.post('/configuracoes', data=dados)
     with appmod.get_db() as conn:
         c = conn.execute("SELECT * FROM compromissos WHERE ano=2027").fetchone()
-        assert (c['categoria'], c['fundo_local_pct'], c['betel'], c['nivelacao'], c['confirmado_em'], c['meses']) == ('formacao', 0, 1, 0, None, 12)
+        assert (c['categoria'], c['fundo_local_pct'], c['betel'], c['nivelacao'], c['confirmado_em'], c['meses']) == ('formacao', 1, 1, 0, None, 12)
     pas = entrar(app, 'vr.pastor', 'pastor12345')
     dados.update({f'm{i}': '2.500,00' for i in range(12)})  # 2.500 > 1,25 SM: formada, nivelação, Betel, fundo 1%
     pas.post('/configuracoes', data=dados)
@@ -360,7 +360,7 @@ def test_cadastro_obrigatorio_livro_excel_e_tutorial(app):
     tes.post('/configuracoes', data={'acao': 'porcentagens', 'ano': date.today().year})
     with appmod.get_db() as conn:
         c = conn.execute("SELECT c.* FROM compromissos c JOIN congregacoes g ON g.id=c.cong_id WHERE g.nome='Nova Esperança'").fetchone()
-        assert c['categoria'] == 'nova' and c['fundo_local_pct'] == 0
+        assert c['categoria'] == 'nova' and c['fundo_local_pct'] == 1
     # salvo pelo tesoureiro: já liberado, sem esperar o pastor
     pag = tes.get('/lancar?tipo=Saída').get_data(as_text=True)
     assert 'Em qual <b>livro</b>' in pag and 'livro-escolha' in pag
@@ -801,3 +801,11 @@ def test_dinheiro_em_decimal():
     assert R.soma([0.1] * 10) == 1.0 and R.soma([1234567.89, 0.01]) == 1234567.9
     assert A.parse_valor('9.999.999,99') == 9999999.99 and A.parse_valor('1.234.567,89') == 1234567.89
     assert A.fmt_brl(9999999.99) == 'R$ 9.999.999,99' and A.fmt_brl(-3672.19) == 'R$ -3.672,19'
+
+
+def test_minimos_para_todas():
+    import regras as R
+    reg = {'fator_formacao': 1 / 3, 'fator_nivelacao': 1.25, 'pct_dizimo_dizimos': 0.10}
+    c = R.carta_anual([244.0] * 12, 1621, reg)          # congregação pequena (como Sorocaba)
+    assert c['betel'] is True and c['fundo_local_pct'] == 1
+    assert R.carta_anual([3700.0] * 12, 1621, reg)['fundo_local_pct'] == 2   # (3700 − 370) / 1621 = 2,05 SM

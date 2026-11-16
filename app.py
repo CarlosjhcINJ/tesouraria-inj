@@ -246,8 +246,8 @@ def init_db():
             elif r['tipo'] == 'real':
                 conn.execute(f"ALTER TABLE {r['t']} ALTER COLUMN {r['c']} TYPE DOUBLE PRECISION")
 
-    # Decisão de nov/2026: Betel 4% fixo para todas e fundo local começando em 1% para todas.
-    # Corrige uma única vez as cartas já emitidas; depois disso a nacional pode ajustar caso a caso.
+    # Norma de sempre (o sistema estava errado): Betel 4% é a contribuição do pastor para pertencer à Betel,
+    # obrigatória para todos; fundo local começa em 1% para todas. Corrige uma vez as cartas já emitidas.
     if not conn.execute("SELECT 1 FROM config_nacional WHERE key='mig_minimos_2026_11'").fetchone():
         conn.execute("UPDATE compromissos SET betel=1")
         conn.execute("UPDATE compromissos SET fundo_local_pct=1 WHERE fundo_local_pct < 1")

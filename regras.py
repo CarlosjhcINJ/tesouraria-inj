@@ -10,7 +10,8 @@ administrativas de 29/10/2026:
   em formação >= 1/3; em projeção abaixo disso. Congregação nova começa do zero.
 - Fundo local: 1% por salário mínimo inteiro contido em (média − 10%),
   aplicado sobre a entrada de cada mês (Art. 12, § 34, como praticado).
-- Betel: 4% do líquido depois de 10% + 5%, fixo e obrigatório para todas.
+- Betel: 4% do líquido depois de 10% + 5%: contribuição do pastor para pertencer à Betel,
+  norma de sempre, obrigatória para todos.
 - Fundo local: começa em 1% para todas e sobe 1% por salário mínimo inteiro.
 - Prazo do envio: dia 5 do mês seguinte (§ 80).
 """

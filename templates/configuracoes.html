@@ -125,7 +125,7 @@
       </div>
       <div class="form-text">Regras do Regulamento Interno: plenamente formada com média a partir de 1 salário mínimo; em formação a partir de
         {{ '%.2f' | format(reg.get('fator_formacao', 0.333)) | replace('.', ',') }} SM; nivelação acima de {{ '%.2f' | format(reg.get('fator_nivelacao', 1.25)) | replace('.', ',') }} SM;
-        fundo local de 1% por salário mínimo inteiro do saldo após o Dízimo dos Dízimos.</div>
+        Betel 4% para todas; fundo local começa em 1% e sobe 1% por salário mínimo inteiro do saldo após o Dízimo dos Dízimos.</div>
     </div>
   </div>
 </div>
@@ -154,9 +154,9 @@
     const n = vals.length, media = n ? vals.reduce((a, b) => a + b, 0) / n : 0;
     let cat = 'nova';
     if (n) cat = media >= SM ? 'formada' : (media >= SM * FF ? 'formacao' : 'projecao');
-    const niv = n > 0 && media > SM * FN, betel = cat === 'formada';
-    const fl = n ? Math.floor((media - r2(media * PDD)) / SM) : 0;
-    const dd = r2(media * PDD), vniv = niv ? r2(media * PNIV) : 0, vbet = betel ? r2((media - dd - vniv) * PBET) : 0, vfl = r2(media * fl / 100);
+    const niv = n > 0 && media > SM * FN, betel = true;   // Betel 4%: fixo para todas
+    const fl = Math.max(1, n ? Math.floor((media - r2(media * PDD)) / SM) : 0);   // começa em 1%
+    const dd = r2(media * PDD), vniv = niv ? r2(media * PNIV) : 0, vbet = betel ? r2((media - dd - vniv) * PBET) : 0, vfl = r2((media - dd - vniv - vbet) * fl / 100);   // residual, depois do Betel
     el('r-media').textContent = brl(r2(media)) + (n ? ` (${n} meses)` : '');
     el('r-cat').textContent = NOMES[cat];
     el('r-niv').textContent = niv ? '(sim)' : '(não)'; el('r-bet').textContent = betel ? '(sim)' : '(não)'; el('r-fl').textContent = fl + '%';

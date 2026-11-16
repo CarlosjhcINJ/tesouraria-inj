@@ -246,11 +246,12 @@ def init_db():
             elif r['tipo'] == 'real':
                 conn.execute(f"ALTER TABLE {r['t']} ALTER COLUMN {r['c']} TYPE DOUBLE PRECISION")
 
-    # Decisão de nov/2026: Betel é obrigatório para todas as congregações (antes, só plenamente formada).
-    # Corrige uma única vez as cartas já emitidas; depois disso a nacional pode desmarcar caso a caso.
-    if not conn.execute("SELECT 1 FROM config_nacional WHERE key='mig_betel_todas'").fetchone():
-        conn.execute("UPDATE compromissos SET betel=1 WHERE categoria <> 'nova'")
-        conn.execute("INSERT INTO config_nacional (key, value) VALUES ('mig_betel_todas', '1')")
+    # Decisão de nov/2026: Betel 4% fixo para todas e fundo local começando em 1% para todas.
+    # Corrige uma única vez as cartas já emitidas; depois disso a nacional pode ajustar caso a caso.
+    if not conn.execute("SELECT 1 FROM config_nacional WHERE key='mig_minimos_2026_11'").fetchone():
+        conn.execute("UPDATE compromissos SET betel=1")
+        conn.execute("UPDATE compromissos SET fundo_local_pct=1 WHERE fundo_local_pct < 1")
+        conn.execute("INSERT INTO config_nacional (key, value) VALUES ('mig_minimos_2026_11', '1')")
 
     # Colunas novas em bancos antigos
     _add_col(conn, 'transacoes', 'origem', 'TEXT')

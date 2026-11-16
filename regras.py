@@ -10,7 +10,7 @@ administrativas de 29/10/2026:
   em formação >= 1/3; em projeção abaixo disso. Congregação nova começa do zero.
 - Fundo local: 1% por salário mínimo inteiro contido em (média − 10%),
   aplicado sobre a entrada de cada mês (Art. 12, § 34, como praticado).
-- Betel: 4% do líquido depois de 10% + 5%, só plenamente formada.
+- Betel: 4% do líquido depois de 10% + 5%, obrigatório para todas (menos congregação nova).
 - Prazo do envio: dia 5 do mês seguinte (§ 80).
 """
 from datetime import date
@@ -135,7 +135,7 @@ def carta_anual(valores_mensais, sm, reg):
     return {
         'total': r2(total), 'meses': n, 'media': r2(media), 'categoria': categoria,
         'nivelacao': nivelacao, 'dez': dez, 'saldo': saldo, 'razao': razao,
-        'fundo_local_pct': fundo_local, 'betel': categoria == 'formada', 'sm': sm,
+        'fundo_local_pct': fundo_local, 'betel': categoria != 'nova', 'sm': sm,
     }
 
 

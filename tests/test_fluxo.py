@@ -300,11 +300,11 @@ def test_recibo_configuracao_balanco_e_impressao(app):
     # ano sem carta: congregação informa, pastor confirma
     # ano sem carta: com os dízimos do ano anterior o sistema define classificação e liquidação
     dados = {'acao': 'porcentagens', 'ano': 2027}
-    dados.update({f'm{i}': '900,00' for i in range(12)})   # média 900 (SM 2026 = 1.621): em formação, sem Betel
+    dados.update({f'm{i}': '900,00' for i in range(12)})   # média 900 (SM 2026 = 1.621): em formação, com Betel (obrigatório para todas)
     tes.post('/configuracoes', data=dados)
     with appmod.get_db() as conn:
         c = conn.execute("SELECT * FROM compromissos WHERE ano=2027").fetchone()
-        assert (c['categoria'], c['fundo_local_pct'], c['betel'], c['nivelacao'], c['confirmado_em'], c['meses']) == ('formacao', 0, 0, 0, None, 12)
+        assert (c['categoria'], c['fundo_local_pct'], c['betel'], c['nivelacao'], c['confirmado_em'], c['meses']) == ('formacao', 0, 1, 0, None, 12)
     pas = entrar(app, 'vr.pastor', 'pastor12345')
     dados.update({f'm{i}': '2.500,00' for i in range(12)})  # 2.500 > 1,25 SM: formada, nivelação, Betel, fundo 1%
     pas.post('/configuracoes', data=dados)

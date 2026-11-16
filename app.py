@@ -246,6 +246,12 @@ def init_db():
             elif r['tipo'] == 'real':
                 conn.execute(f"ALTER TABLE {r['t']} ALTER COLUMN {r['c']} TYPE DOUBLE PRECISION")
 
+    # Decisão de nov/2026: Betel é obrigatório para todas as congregações (antes, só plenamente formada).
+    # Corrige uma única vez as cartas já emitidas; depois disso a nacional pode desmarcar caso a caso.
+    if not conn.execute("SELECT 1 FROM config_nacional WHERE key='mig_betel_todas'").fetchone():
+        conn.execute("UPDATE compromissos SET betel=1 WHERE categoria <> 'nova'")
+        conn.execute("INSERT INTO config_nacional (key, value) VALUES ('mig_betel_todas', '1')")
+
     # Colunas novas em bancos antigos
     _add_col(conn, 'transacoes', 'origem', 'TEXT')
     _add_col(conn, 'transacoes', 'transferencia', 'INTEGER DEFAULT 0')
@@ -1332,7 +1338,7 @@ def lancar():
                            ultimo=ultimo, saldos=saldos, livro_nome=LIVRO_NOME,
                            restaurar=bool(request.args.get('restaurar')), negativo=bool(request.args.get('negativo')),
                            envios_auto={
-                               'liq': ['Dízimo dos Dízimos 10%', 'Nivelação 5% (se houver)', 'Betel 4% (se houver)',
+                               'liq': ['Dízimo dos Dízimos 10%', 'Nivelação 5% (se houver)', 'Betel 4%',
                                        'Aporte ao fundo local', 'Sustento pastoral'],
                                'nac': [rot for _, rot, _ in R.LINHAS_NACIONAL],
                                'reg': [rot for _, rot, _ in R.LINHAS_DISTRITAL]},
